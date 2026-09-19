@@ -1385,6 +1385,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             self._ensure_intelligence_item_scope_values()
             self._ensure_schema_migration_record()
             self._ensure_intelligence_items_unique_index()
+            self._ensure_expectation_schema()
 
             self._initialized = True
             logger.info(f"数据库初始化完成: {db_url}")
@@ -2142,6 +2143,20 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 )
         except Exception as exc:
             logger.warning("资讯池 scope_value 回填失败，已跳过: %s", exc)
+
+    def _ensure_expectation_schema(self) -> None:
+        """确保预期管理系统三张表存在（旧库自动建表）。"""
+        try:
+            for model in (
+                UserExpectationRecord,
+                ExpectationOutcomeRecord,
+                ExpectationAgentEvalRecord,
+            ):
+                if not inspect(self._engine).has_table(model.__tablename__):
+                    model.__table__.create(self._engine)
+                    logger.info("预期管理表已创建: %s", model.__tablename__)
+        except Exception as exc:
+            logger.warning("预期管理 Schema 检查失败，已跳过: %s", exc)
 
     @classmethod
     def get_instance(cls) -> 'DatabaseManager':
@@ -4333,6 +4348,144 @@ def _coerce_llm_usage_non_negative_int(value: Any) -> Optional[int]:
             return None
         return int(text)
     return None
+
+
+# ============================================================
+# 预期管理系统 ORM 模型
+# ============================================================
+
+class UserExpectationRecord(Base):
+    """用户每日预期主记录。每个 target_date 只允许存在一条。"""
+
+    __tablename__ = 'user_expectations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    target_date = Column(Date, nullable=False, index=True)
+    market = Column(String(8), nullable=False, default='cn', index=True)
+    created_at = Column(DateTime, default=utc_naive_now)
+    updated_at = Column(DateTime, default=utc_naive_now, onupdate=utc_naive_now)
+
+    # 心理快照（前置问卷）
+    emotion_index = Column(Integer)           # 1-10，1=极度恐惧，10=极度贪婪
+    decision_drivers = Column(Text)           # JSON list: ['data', 'news', 'gut', ...]
+    research_time = Column(String(16))        # 'lt_30m' | '30_90m' | 'gt_90m'
+    interference_flags = Column(Text)         # JSON list: ['loss_streak', 'fomo', ...]
+
+    # 大盘预期
+    index_direction = Column(String(8), nullable=False)   # 'up' | 'flat' | 'down'
+    index_magnitude = Column(String(16))                  # 'strong' | 'moderate' | 'weak'
+    index_reasoning = Column(Text, nullable=False)
+
+    # 个股预期列表（JSON array）
+    # [{code, name, action, direction, target_price, stop_loss, confidence, reasoning}]
+    stock_expectations = Column(Text, default='[]')
+
+    # 核心假设与计划
+    key_assumptions = Column(Text, default='[]')  # JSON list of strings
+    key_risks = Column(Text)
+    operation_plan = Column(Text)
+    overall_confidence = Column(Integer, default=3)  # 1-5
+    tags = Column(Text, default='[]')                # JSON list
+
+    __table_args__ = (
+        UniqueConstraint('target_date', name='uix_expectation_target_date'),
+        CheckConstraint(
+            "index_direction IN ('up', 'flat', 'down')",
+            name='ck_expectation_index_direction',
+        ),
+        CheckConstraint(
+            "overall_confidence IS NULL OR (overall_confidence >= 1 AND overall_confidence <= 5)",
+            name='ck_expectation_overall_confidence',
+        ),
+        CheckConstraint(
+            "emotion_index IS NULL OR (emotion_index >= 1 AND emotion_index <= 10)",
+            name='ck_expectation_emotion_index',
+        ),
+    )
+
+
+class ExpectationOutcomeRecord(Base):
+    """每条预期对应的结果记录：自动评分 + 用户自我复盘。"""
+
+    __tablename__ = 'expectation_outcomes'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    expectation_id = Column(
+        Integer,
+        ForeignKey('user_expectations.id', ondelete='CASCADE'),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    outcome_date = Column(Date, nullable=False, index=True)
+    scored_at = Column(DateTime)
+
+    # 自动评分
+    auto_score = Column(Float)                   # 0-100
+    index_score_detail = Column(Text)            # JSON: {direction_hit, magnitude_hit, actual_chg_pct, score}
+    stock_scores = Column(Text)                  # JSON array: [{code, direction_hit, score, ...}]
+
+    # 用户自我复盘
+    self_score = Column(Integer)                 # 1-5，用户主观评分
+    execution_status = Column(String(16))        # 'executed' | 'partial' | 'not_executed'
+    execution_notes = Column(Text)
+    deviation_reason = Column(Text)
+    assumption_reviews = Column(Text)            # JSON: [{assumption, result: 'hit'|'miss'|'na'}]
+    lessons = Column(Text)
+    filled_at = Column(DateTime)
+
+    created_at = Column(DateTime, default=utc_naive_now)
+    updated_at = Column(DateTime, default=utc_naive_now, onupdate=utc_naive_now)
+
+    __table_args__ = (
+        CheckConstraint(
+            "self_score IS NULL OR (self_score >= 1 AND self_score <= 5)",
+            name='ck_outcome_self_score',
+        ),
+        CheckConstraint(
+            "execution_status IS NULL OR execution_status IN ('executed', 'partial', 'not_executed')",
+            name='ck_outcome_execution_status',
+        ),
+    )
+
+
+class ExpectationAgentEvalRecord(Base):
+    """Agent 对预期质量的评价。"""
+
+    __tablename__ = 'expectation_agent_evals'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    expectation_id = Column(
+        Integer,
+        ForeignKey('user_expectations.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    eval_type = Column(String(16), nullable=False, default='single', index=True)  # 'single' | 'weekly'
+    eval_date = Column(Date, index=True)
+    generated_at = Column(DateTime, default=utc_naive_now)
+
+    # 评分维度（1-5）
+    reasoning_quality = Column(Integer)
+    information_usage = Column(Integer)
+    risk_awareness = Column(Integer)
+    execution_alignment = Column(Integer)   # 仅有 outcome 后才有意义
+
+    # 评价内容
+    overall_assessment = Column(Text)
+    strengths = Column(Text)              # JSON list
+    weaknesses = Column(Text)            # JSON list
+    improvement_suggestions = Column(Text)  # JSON list
+    bias_tags = Column(Text)             # JSON list: 检测到的认知偏差
+
+    created_at = Column(DateTime, default=utc_naive_now)
+
+    __table_args__ = (
+        CheckConstraint(
+            "eval_type IN ('single', 'weekly')",
+            name='ck_agent_eval_type',
+        ),
+    )
 
 
 if __name__ == "__main__":
