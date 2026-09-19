@@ -56,7 +56,7 @@ export const Shell: React.FC<ShellProps> = ({ children }) => {
         </div>
       </div>
 
-      <div className="flex min-h-screen w-full">
+      <div className="flex h-screen w-full overflow-hidden">
         <aside
           className={cn(
             'sticky top-0 z-40 hidden h-screen shrink-0 overflow-visible border-r border-border/40 p-2.5 transition-[width] duration-200 lg:flex',
@@ -67,7 +67,7 @@ export const Shell: React.FC<ShellProps> = ({ children }) => {
           <SidebarNav collapsed={collapsed} variant="rail" onNavigate={() => setMobileOpen(false)} />
         </aside>
 
-        <main className="min-h-0 min-w-0 flex-1 pt-14 lg:px-5 lg:py-4 lg:pt-4 touch-pan-y">
+        <main className="min-h-0 min-w-0 flex-1 overflow-hidden pt-14 lg:pt-0 touch-pan-y flex flex-col">
           {children ?? <Outlet />}
         </main>
       </div>

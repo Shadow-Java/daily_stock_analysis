@@ -8,12 +8,18 @@ const ACTION_LABEL: Record<string, string> = {
   buy: '买入', sell: '卖出', add: '加仓', reduce: '减仓', hold: '持有', watch: '观望',
 }
 const ACTION_COLOR: Record<string, string> = {
-  buy: 'text-green-500 dark:text-green-400',
-  add: 'text-green-500 dark:text-green-400',
-  sell: 'text-red-500 dark:text-red-400',
-  reduce: 'text-red-500 dark:text-red-400',
-  hold: 'text-secondary-text',
-  watch: 'text-secondary-text',
+  buy: 'text-green-500', add: 'text-green-500',
+  sell: 'text-red-500', reduce: 'text-red-500',
+  hold: 'text-secondary-text', watch: 'text-secondary-text',
+}
+
+function getStatus(targetDate: string) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const t = new Date(targetDate)
+  t.setHours(0, 0, 0, 0)
+  if (t > today) return 'future' as const
+  return 'pending' as const   // past or today → needs review
 }
 
 interface Props {
@@ -22,33 +28,26 @@ interface Props {
   selected?: boolean
 }
 
-function StarRow({ value, max = 5 }: { value: number; max?: number }) {
-  return (
-    <span className="inline-flex gap-px" aria-label={`信心 ${value}/${max}`}>
-      {Array.from({ length: max }, (_, i) => (
-        <span key={i} className={cn('text-[11px]', i < value ? 'text-amber-400' : 'text-border/60')}>
-          ★
-        </span>
-      ))}
-    </span>
-  )
-}
-
 export function ExpectationCard({ expectation, onClick, selected }: Props) {
   const stockCount = expectation.stockExpectations?.length ?? 0
   const stocks = expectation.stockExpectations ?? []
+  const status = getStatus(expectation.targetDate)
 
   const date = new Date(expectation.targetDate)
   const weekday = WEEKDAY[date.getDay()]
   const mmdd = expectation.targetDate.slice(5)
 
-  // 方向对应的左边条颜色
-  const barColor =
+  const leftBar =
     expectation.indexDirection === 'up'
       ? 'bg-green-500'
       : expectation.indexDirection === 'down'
         ? 'bg-red-500'
-        : 'bg-border/60'
+        : 'bg-border/50'
+
+  // 待复盘用黄色边框高亮
+  const pendingBorder = status === 'pending' && !selected
+    ? 'border-amber-400/60'
+    : ''
 
   return (
     <div
@@ -56,35 +55,47 @@ export function ExpectationCard({ expectation, onClick, selected }: Props) {
       className={cn(
         'group relative flex cursor-pointer overflow-hidden rounded-xl border bg-card transition-all duration-150',
         selected
-          ? 'border-[hsl(var(--primary))/50] ring-1 ring-[hsl(var(--primary))/30] shadow-md'
-          : 'border-border/60 hover:border-border hover:shadow-sm',
+          ? 'border-[hsl(var(--primary))/50] ring-1 ring-[hsl(var(--primary))/25] shadow-md'
+          : cn('hover:border-border hover:shadow-sm', pendingBorder),
       )}
     >
       {/* 左边方向色条 */}
-      <div className={cn('w-1 shrink-0 rounded-l-xl', barColor)} />
+      <div className={cn('w-1 shrink-0', leftBar)} />
 
-      <div className="flex-1 min-w-0 p-3 space-y-2">
-        {/* 行 1：日期 + 市场 */}
-        <div className="flex items-center justify-between">
+      <div className="flex-1 min-w-0 px-3 py-2.5 space-y-1.5">
+        {/* 行 1：日期 + 状态 + 市场 */}
+        <div className="flex items-center justify-between gap-1">
           <div className="flex items-baseline gap-1.5">
             <span className="text-[13px] font-semibold text-foreground leading-none">{mmdd}</span>
             <span className="text-[11px] text-secondary-text">周{weekday}</span>
           </div>
-          <span className="text-[10.5px] text-secondary-text/70 bg-muted/60 px-1.5 py-0.5 rounded">
-            {MARKET_LABEL[expectation.market] ?? expectation.market}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {status === 'pending' && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-400/15 border border-amber-400/40 text-amber-600 dark:text-amber-400 leading-tight">
+                待复盘
+              </span>
+            )}
+            {status === 'future' && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-muted border border-border/40 text-secondary-text leading-tight">
+                仅录入
+              </span>
+            )}
+            <span className="text-[10px] text-secondary-text/60 bg-muted/60 px-1 py-0.5 rounded">
+              {MARKET_LABEL[expectation.market] ?? expectation.market}
+            </span>
+          </div>
         </div>
 
-        {/* 行 2：方向 + 幅度 + 信心 */}
+        {/* 行 2：方向 + 幅度 + 个股数 */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <DirectionBadge direction={expectation.indexDirection} />
+          <DirectionBadge direction={expectation.indexDirection} size="sm" />
           {expectation.indexMagnitude && (
-            <span className="text-[11px] text-secondary-text/80">
+            <span className="text-[10.5px] text-secondary-text">
               {expectation.indexMagnitude === 'strong' ? '大幅' : expectation.indexMagnitude === 'moderate' ? '中幅' : '小幅'}
             </span>
           )}
-          {expectation.overallConfidence != null && (
-            <StarRow value={expectation.overallConfidence} />
+          {stockCount > 0 && (
+            <span className="text-[10.5px] text-secondary-text">· {stockCount} 只个股</span>
           )}
         </div>
 
@@ -99,16 +110,14 @@ export function ExpectationCard({ expectation, onClick, selected }: Props) {
             {stocks.slice(0, 3).map((s) => (
               <span
                 key={s.code}
-                className="inline-flex items-center gap-1 text-[10.5px] px-1.5 py-0.5 rounded bg-muted/70 border border-border/40 text-secondary-text"
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted/70 border border-border/40 text-secondary-text"
               >
                 <span className={cn('font-medium', ACTION_COLOR[s.action])}>{ACTION_LABEL[s.action]}</span>
                 <span>{s.code}</span>
               </span>
             ))}
             {stockCount > 3 && (
-              <span className="text-[10.5px] text-secondary-text/60 self-center">
-                +{stockCount - 3}
-              </span>
+              <span className="text-[10px] text-secondary-text/60 self-center">+{stockCount - 3}</span>
             )}
           </div>
         )}

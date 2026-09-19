@@ -24,6 +24,13 @@ const AlertsPage = lazy(() => import('./pages/AlertsPage'));
 const TokenUsagePage = lazy(() => import('./pages/TokenUsagePage'));
 const StockScreeningPage = lazy(() => import('./pages/StockScreeningPage'));
 const ExpectationsPage = lazy(() => import('./pages/ExpectationsPage'));
+const GrowthPage = lazy(() => import('./pages/GrowthPage'));
+const GrowthPrinciplesPage = lazy(() => import('./pages/GrowthPrinciplesPage'));
+const GrowthBiasProfilePage = lazy(() => import('./pages/GrowthBiasProfilePage'));
+const GrowthMethodologyPage = lazy(() => import('./pages/GrowthMethodologyPage'));
+const TradesPage = lazy(() => import('./pages/TradesPage'));
+const ExpectationNewPage = lazy(() => import('./pages/ExpectationNewPage'));
+const ExpectationDetailPage = lazy(() => import('./pages/ExpectationDetailPage'));
 
 const AppContent: React.FC = () => {
   const location = useLocation();
@@ -90,6 +97,13 @@ const AppContent: React.FC = () => {
         <Route path="/usage" element={<TokenUsagePage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/expectations" element={<ExpectationsPage />} />
+        <Route path="/expectations/new" element={<ExpectationNewPage />} />
+        <Route path="/expectations/:id" element={<ExpectationDetailPage />} />
+        <Route path="/growth" element={<GrowthPage />} />
+        <Route path="/growth/principles" element={<GrowthPrinciplesPage />} />
+        <Route path="/growth/bias-profile" element={<GrowthBiasProfilePage />} />
+        <Route path="/growth/methodology" element={<GrowthMethodologyPage />} />
+        <Route path="/trades" element={<TradesPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

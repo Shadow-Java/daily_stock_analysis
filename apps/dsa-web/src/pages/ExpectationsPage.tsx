@@ -1,78 +1,159 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Target } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Target, Plus, ChevronRight, TrendingUp, BarChart2, CheckSquare, Star } from 'lucide-react'
 import { expectationsApi } from '../api/expectations'
-import type {
-  ExpectationCreateRequest,
-  ExpectationDetail,
-  SelfReviewRequest,
-  UserExpectation,
-} from '../types/expectations'
+import type { UserExpectation } from '../types/expectations'
 import { Button } from '../components/common/Button'
-import { Drawer } from '../components/common/Drawer'
-import { EmptyState } from '../components/common/EmptyState'
 import { Loading } from '../components/common/Loading'
 import { Pagination } from '../components/common/Pagination'
-import { AgentEvalPanel } from '../components/expectations/AgentEvalPanel'
-import { ExpectationCard } from '../components/expectations/ExpectationCard'
-import { ExpectationForm } from '../components/expectations/ExpectationForm'
-import { OutcomePanel } from '../components/expectations/OutcomePanel'
+import { PageTabNav } from '../components/common/PageTabNav'
 import { DirectionBadge } from '../components/expectations/DirectionBadge'
+import { cn } from '../utils/cn'
 
 const PAGE_SIZE = 20
-
-const MAGNITUDE_LABEL: Record<string, string> = {
-  strong: '大幅',
-  moderate: '中幅',
-  weak: '小幅',
-}
+const WEEKDAY = ['日', '一', '二', '三', '四', '五', '六']
 const ACTION_LABEL: Record<string, string> = {
   buy: '买入', sell: '卖出', add: '加仓', reduce: '减仓', hold: '持有', watch: '观望',
 }
 const ACTION_COLOR: Record<string, string> = {
   buy: 'text-green-500', add: 'text-green-500',
-  sell: 'text-red-500', reduce: 'text-red-500',
+  sell: 'text-red-500',  reduce: 'text-red-500',
   hold: 'text-secondary-text', watch: 'text-secondary-text',
 }
 
-function StarRow({ value, max = 5 }: { value: number; max?: number }) {
+function isPast(dateStr: string) {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const d = new Date(dateStr); d.setHours(0, 0, 0, 0)
+  return d <= today
+}
+
+function groupByWeek(items: UserExpectation[]) {
+  const now = new Date(); now.setHours(0, 0, 0, 0)
+  const dow = (now.getDay() + 6) % 7
+  const monday = new Date(now); monday.setDate(now.getDate() - dow)
+  const lastMonday = new Date(monday); lastMonday.setDate(monday.getDate() - 7)
+
+  const thisWeek: UserExpectation[] = []
+  const lastWeek: UserExpectation[] = []
+  const older:    UserExpectation[] = []
+
+  for (const item of items) {
+    const d = new Date(item.targetDate); d.setHours(0, 0, 0, 0)
+    if (d >= monday)     thisWeek.push(item)
+    else if (d >= lastMonday) lastWeek.push(item)
+    else                      older.push(item)
+  }
+
+  const groups: { label: string; items: UserExpectation[] }[] = []
+  if (thisWeek.length) groups.push({ label: '本周', items: thisWeek })
+  if (lastWeek.length) groups.push({ label: '上周', items: lastWeek })
+  if (older.length)    groups.push({ label: '更早', items: older })
+  return groups
+}
+
+function StatChip({ icon: Icon, label, value, sub, color }: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string; value: string; sub?: string; color: string
+}) {
   return (
-    <span className="inline-flex gap-px">
-      {Array.from({ length: max }, (_, i) => (
-        <span key={i} className={i < value ? 'text-amber-400 text-xs' : 'text-border/60 text-xs'}>★</span>
-      ))}
-    </span>
+    <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-card px-4 py-3 flex-1 min-w-[120px]">
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
+        <Icon className="w-4 h-4" />
+      </div>
+      <div>
+        <div className="text-[10.5px] text-secondary-text">{label}</div>
+        <div className="text-base font-bold text-foreground">
+          {value}
+          {sub && <span className="text-xs font-normal text-secondary-text ml-1">{sub}</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ExpCard({ item, onClick }: { item: UserExpectation; onClick: () => void }) {
+  const past = isPast(item.targetDate)
+  const stocks = item.stockExpectations ?? []
+  const stockCount = stocks.length
+  const date = new Date(item.targetDate)
+  const mmdd = item.targetDate.slice(5)
+  const weekday = WEEKDAY[date.getDay()]
+
+  return (
+    <div
+      onClick={onClick}
+      className={cn(
+        'group flex items-stretch rounded-xl border bg-card cursor-pointer',
+        'hover:shadow-sm transition-all duration-150',
+        past ? 'border-amber-400/50 hover:border-amber-400/70' : 'border-border/50 hover:border-border',
+      )}
+    >
+      <div className={cn(
+        'w-1 rounded-l-xl shrink-0',
+        item.indexDirection === 'up' ? 'bg-green-500' :
+        item.indexDirection === 'down' ? 'bg-red-500' : 'bg-border/40',
+      )} />
+      <div className="flex-1 min-w-0 px-4 py-3 flex items-start gap-3">
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold text-foreground">{mmdd}</span>
+            <span className="text-xs text-secondary-text">周{weekday}</span>
+            <DirectionBadge direction={item.indexDirection} size="sm" />
+            {item.indexMagnitude && (
+              <span className="text-[10.5px] text-secondary-text">
+                {item.indexMagnitude === 'strong' ? '大幅' : item.indexMagnitude === 'moderate' ? '中幅' : '小幅'}
+              </span>
+            )}
+            {stockCount > 0 && <span className="text-[10.5px] text-secondary-text">· {stockCount} 只个股</span>}
+          </div>
+          <p className="text-xs text-secondary-text leading-relaxed line-clamp-2">{item.indexReasoning}</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {stocks.slice(0, 3).map((s) => (
+              <span key={s.code} className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-muted/70 border border-border/40 text-secondary-text">
+                <span className={cn('font-medium', ACTION_COLOR[s.action])}>{ACTION_LABEL[s.action]}</span>
+                <span>{s.code}</span>
+              </span>
+            ))}
+            {stockCount > 3 && <span className="text-[10px] text-secondary-text/60">+{stockCount - 3}</span>}
+            <span className={cn(
+              'ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
+              past
+                ? 'bg-amber-400/12 border-amber-400/40 text-amber-600 dark:text-amber-400'
+                : 'bg-muted border-border/40 text-secondary-text font-normal',
+            )}>
+              {past ? '待复盘' : '仅录入'}
+            </span>
+            {item.overallConfidence != null && (
+              <span className="flex items-center gap-px ml-0.5">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <span key={i} className={cn('text-[10px]', i < item.overallConfidence! ? 'text-amber-400' : 'text-border/50')}>★</span>
+                ))}
+              </span>
+            )}
+          </div>
+        </div>
+        <ChevronRight className="w-4 h-4 text-secondary-text/40 group-hover:text-secondary-text shrink-0 mt-1 transition-colors" />
+      </div>
+    </div>
   )
 }
 
 export default function ExpectationsPage() {
-  const [items, setItems] = useState<UserExpectation[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const navigate = useNavigate()
+  const [items, setItems]     = useState<UserExpectation[]>([])
+  const [total, setTotal]     = useState(0)
+  const [page, setPage]       = useState(1)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const [showForm, setShowForm] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const [selectedId, setSelectedId] = useState<number | null>(null)
-  const [detail, setDetail] = useState<ExpectationDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
-
-  const [isScoringId, setIsScoringId] = useState<number | null>(null)
-  const [isReviewSubmitting, setIsReviewSubmitting] = useState(false)
-  const [isEvalTriggering, setIsEvalTriggering] = useState(false)
-
+  const [error, setError]     = useState<string | null>(null)
   const reqRef = useRef(0)
 
   const load = useCallback(async (p: number) => {
     const rid = ++reqRef.current
-    setLoading(true)
-    setError(null)
+    setLoading(true); setError(null)
     try {
       const res = await expectationsApi.list({ page: p, pageSize: PAGE_SIZE })
       if (reqRef.current !== rid) return
-      setItems(res.items)
-      setTotal(res.total)
+      setItems(res.items); setTotal(res.total)
     } catch {
       if (reqRef.current !== rid) return
       setError('加载失败，请重试')
@@ -83,314 +164,102 @@ export default function ExpectationsPage() {
 
   useEffect(() => { load(page) }, [page, load])
 
-  async function loadDetail(id: number) {
-    setSelectedId(id)
-    setDetailLoading(true)
-    try {
-      const res = await expectationsApi.get(id)
-      setDetail(res)
-    } catch {
-      setDetail(null)
-    } finally {
-      setDetailLoading(false)
-    }
-  }
-
-  async function handleCreate(payload: ExpectationCreateRequest) {
-    setIsSubmitting(true)
-    try {
-      await expectationsApi.create(payload)
-      setShowForm(false)
-      load(1)
-      setPage(1)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  async function handleScore(id: number) {
-    setIsScoringId(id)
-    try {
-      await expectationsApi.score(id)
-      if (selectedId === id) loadDetail(id)
-    } finally {
-      setIsScoringId(null)
-    }
-  }
-
-  async function handleSelfReview(payload: SelfReviewRequest) {
-    if (!selectedId) return
-    setIsReviewSubmitting(true)
-    try {
-      await expectationsApi.fillSelfReview(selectedId, payload)
-      loadDetail(selectedId)
-    } finally {
-      setIsReviewSubmitting(false)
-    }
-  }
-
-  async function handleTriggerEval() {
-    if (!selectedId) return
-    setIsEvalTriggering(true)
-    try {
-      await expectationsApi.triggerAgentEval(selectedId)
-      loadDetail(selectedId)
-    } finally {
-      setIsEvalTriggering(false)
-    }
-  }
-
-  const totalPages = Math.ceil(total / PAGE_SIZE)
-  const exp = detail?.expectation
+  const totalPages   = Math.ceil(total / PAGE_SIZE)
+  const groups       = groupByWeek(items)
+  const pendingCount = items.filter((i) => isPast(i.targetDate)).length
 
   return (
-    <div className="flex flex-col h-full">
-      {/* ── 顶栏 ── */}
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/50">
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* ── 顶部标签导航 ── */}
+      <PageTabNav latestId={items[0]?.id} />
+
+      {/* ── 页面标题栏 ── */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-border/50 shrink-0">
         <div className="flex items-center gap-2">
           <Target className="w-4 h-4 text-[hsl(var(--primary))]" />
-          <h1 className="text-sm font-semibold text-foreground">预期管理</h1>
+          <h1 className="text-sm font-semibold text-foreground">预期列表</h1>
           {total > 0 && (
-            <span className="text-xs text-secondary-text bg-muted/70 px-1.5 py-0.5 rounded-full">
-              {total}
-            </span>
+            <span className="text-xs text-secondary-text bg-muted/70 px-1.5 py-0.5 rounded-full">{total}</span>
           )}
         </div>
-        <Button variant="primary" size="sm" onClick={() => setShowForm(true)}>
-          + 今日预期
+        <Button variant="primary" size="sm" onClick={() => navigate('/expectations/new')}>
+          <Plus className="w-3.5 h-3.5 mr-1" />今日预期
         </Button>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* ── 左：列表 ── */}
-        <div className="w-72 shrink-0 flex flex-col border-r border-border/40 overflow-hidden bg-muted/20">
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {loading && <Loading />}
-            {!loading && error && (
-              <p className="text-xs text-destructive text-center py-6">{error}</p>
-            )}
-            {!loading && !error && items.length === 0 && (
-              <EmptyState
-                title="还没有预期记录"
-                description="点击「今日预期」开始第一条记录"
-              />
-            )}
-            {items.map((item) => (
-              <ExpectationCard
-                key={item.id}
-                expectation={item}
-                selected={selectedId === item.id}
-                onClick={() => loadDetail(item.id)}
-              />
-            ))}
-          </div>
+      {/* ── 内容区 ── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-5 py-4 space-y-4">
+
+          {/* 概况 chips */}
+          {total > 0 && (
+            <div className="flex gap-3 flex-wrap">
+              <StatChip icon={TrendingUp}  label="本周准确率" value="—"           color="bg-[hsl(var(--primary))/10] text-[hsl(var(--primary))]" />
+              <StatChip icon={BarChart2}   label="连续命中"   value="—" sub="天"   color="bg-green-500/10 text-green-500" />
+              <StatChip icon={CheckSquare} label="已录入"     value={String(total)} sub="条" color="bg-amber-500/10 text-amber-500" />
+              <StatChip icon={Star}        label="Agent 评级" value="—"           color="bg-purple-500/10 text-purple-500" />
+            </div>
+          )}
+
+          {loading && <div className="flex justify-center py-12"><Loading /></div>}
+          {!loading && error && <p className="text-sm text-destructive text-center py-8">{error}</p>}
+
+          {/* 空状态 */}
+          {!loading && !error && items.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 gap-5">
+              <div className="w-16 h-16 rounded-2xl bg-[hsl(var(--primary))/8] flex items-center justify-center">
+                <Target className="w-7 h-7 text-[hsl(var(--primary))] opacity-60" />
+              </div>
+              <div className="text-center">
+                <p className="text-base font-semibold text-foreground">开始你的第一次预期记录</p>
+                <p className="text-sm text-secondary-text mt-2 leading-relaxed max-w-xs">
+                  每日花 5–10 分钟写下你的市场判断，<br />
+                  30 天后，你会看到自己真实的思维模式。
+                </p>
+              </div>
+              <Button variant="primary" size="sm" onClick={() => navigate('/expectations/new')}>
+                录入今日预期 →
+              </Button>
+            </div>
+          )}
+
+          {/* 待复盘提醒 */}
+          {pendingCount > 0 && (
+            <div className="flex items-center gap-3 rounded-xl bg-amber-400/8 border border-amber-400/30 px-4 py-3">
+              <span className="text-sm">⏰</span>
+              <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                你有 <strong>{pendingCount}</strong> 条预期待复盘——记得收盘后填写自我复盘，让数据闭环。
+              </p>
+            </div>
+          )}
+
+          {/* 分周分组列表 */}
+          {groups.map((group) => (
+            <div key={group.label}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10.5px] font-bold text-secondary-text uppercase tracking-wide">{group.label}</span>
+                <div className="flex-1 h-px bg-border/40" />
+                <span className="text-[10.5px] text-secondary-text">{group.items.length} 条</span>
+              </div>
+              <div className="space-y-2">
+                {group.items.map((item) => (
+                  <ExpCard
+                    key={item.id}
+                    item={item}
+                    onClick={() => navigate(`/expectations/${item.id}`)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+
           {totalPages > 1 && (
-            <div className="p-3 border-t border-border/40">
+            <div className="flex justify-center pt-2">
               <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
             </div>
           )}
         </div>
-
-        {/* ── 右：详情 ── */}
-        <div className="flex-1 overflow-y-auto">
-          {/* 空状态 */}
-          {!selectedId && (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-secondary-text">
-              <Target className="w-10 h-10 opacity-20" />
-              <p className="text-sm">选择一条预期查看详情</p>
-            </div>
-          )}
-
-          {selectedId && detailLoading && (
-            <div className="flex items-center justify-center h-full">
-              <Loading />
-            </div>
-          )}
-
-          {selectedId && !detailLoading && detail && exp && (
-            <div className="max-w-2xl mx-auto px-6 py-5 space-y-4">
-
-              {/* ── 预期概览卡片 ── */}
-              <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
-                {/* 卡头：日期 + 操作 */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-muted/30">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-semibold text-foreground">
-                      {exp.targetDate} 预期
-                    </h2>
-                    <DirectionBadge direction={exp.indexDirection} />
-                    {exp.indexMagnitude && (
-                      <span className="text-xs text-secondary-text">
-                        {MAGNITUDE_LABEL[exp.indexMagnitude]}
-                      </span>
-                    )}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="xsm"
-                    isLoading={isScoringId === selectedId}
-                    loadingText="评分中..."
-                    onClick={() => handleScore(selectedId)}
-                  >
-                    触发评分
-                  </Button>
-                </div>
-
-                {/* 大盘理由 */}
-                <div className="px-4 py-3 space-y-3">
-                  {exp.overallConfidence != null && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-secondary-text">整体信心</span>
-                      <StarRow value={exp.overallConfidence} />
-                    </div>
-                  )}
-
-                  <p className="text-sm text-foreground/90 leading-relaxed">
-                    {exp.indexReasoning}
-                  </p>
-
-                  {/* 核心假设 */}
-                  {exp.keyAssumptions && exp.keyAssumptions.length > 0 && (
-                    <div className="space-y-1.5">
-                      <div className="text-xs font-medium text-secondary-text">核心假设</div>
-                      {exp.keyAssumptions.map((a, i) => (
-                        <div key={i} className="flex gap-2 text-xs text-secondary-text">
-                          <span className="shrink-0 w-4 h-4 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium">
-                            {i + 1}
-                          </span>
-                          <span className="leading-relaxed">{a}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* 关键风险 + 操作计划 */}
-                  {(exp.keyRisks || exp.operationPlan) && (
-                    <div className="grid grid-cols-2 gap-3 pt-1">
-                      {exp.keyRisks && (
-                        <div className="rounded-lg bg-red-500/5 border border-red-500/15 px-3 py-2">
-                          <div className="text-[10.5px] font-medium text-red-500/80 mb-1">关键风险</div>
-                          <p className="text-xs text-secondary-text leading-relaxed">{exp.keyRisks}</p>
-                        </div>
-                      )}
-                      {exp.operationPlan && (
-                        <div className="rounded-lg bg-[hsl(var(--primary))/5] border border-[hsl(var(--primary))/15] px-3 py-2">
-                          <div className="text-[10.5px] font-medium text-[hsl(var(--primary))] mb-1">操作计划</div>
-                          <p className="text-xs text-secondary-text leading-relaxed">{exp.operationPlan}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 个股预期列表 */}
-                {exp.stockExpectations && exp.stockExpectations.length > 0 && (
-                  <div className="border-t border-border/40 px-4 py-3">
-                    <div className="text-xs font-medium text-secondary-text mb-2">个股预期</div>
-                    <div className="space-y-2">
-                      {exp.stockExpectations.map((s) => (
-                        <div
-                          key={s.code}
-                          className="flex items-start gap-2 p-2 rounded-lg bg-muted/40 border border-border/30"
-                        >
-                          <span className="font-semibold text-xs text-foreground min-w-[60px]">{s.code}</span>
-                          <span className={`text-xs font-medium shrink-0 ${ACTION_COLOR[s.action] ?? 'text-secondary-text'}`}>
-                            {ACTION_LABEL[s.action]}
-                          </span>
-                          <DirectionBadge direction={s.direction} size="sm" />
-                          <div className="flex-1 min-w-0">
-                            {s.reasoning && (
-                              <p className="text-xs text-secondary-text leading-relaxed line-clamp-2">
-                                {s.reasoning}
-                              </p>
-                            )}
-                          </div>
-                          <StarRow value={s.confidence} max={5} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ── 心理快照摘要（若有） ── */}
-              {(exp.emotionIndex != null || (exp.decisionDrivers && exp.decisionDrivers.length > 0)) && (
-                <div className="rounded-xl border border-border/40 bg-muted/30 px-4 py-3">
-                  <div className="text-xs font-medium text-secondary-text mb-2">录入时心理快照</div>
-                  <div className="flex flex-wrap gap-x-5 gap-y-1">
-                    {exp.emotionIndex != null && (
-                      <div className="flex items-center gap-1.5 text-xs text-secondary-text">
-                        <span>情绪</span>
-                        <span className="font-semibold text-foreground">{exp.emotionIndex}/10</span>
-                        <span>{exp.emotionIndex <= 3 ? '😨 偏恐惧' : exp.emotionIndex <= 7 ? '😐 中性' : '🤑 偏贪婪'}</span>
-                      </div>
-                    )}
-                    {exp.researchTime && (
-                      <div className="flex items-center gap-1.5 text-xs text-secondary-text">
-                        <span>研究时间</span>
-                        <span className="font-semibold text-foreground">
-                          {exp.researchTime === 'lt_30m' ? '<30m' : exp.researchTime === '30_90m' ? '30-90m' : '>90m'}
-                        </span>
-                      </div>
-                    )}
-                    {exp.decisionDrivers && exp.decisionDrivers.length > 0 && (
-                      <div className="flex items-center gap-1.5 text-xs text-secondary-text flex-wrap">
-                        <span>驱动</span>
-                        {exp.decisionDrivers.map((d) => (
-                          <span key={d} className="px-1.5 py-0.5 rounded bg-[hsl(var(--primary))/10] text-[hsl(var(--primary))] text-[10.5px]">
-                            {d}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {exp.interferenceFlags && exp.interferenceFlags.length > 0 && (
-                      <div className="flex items-center gap-1.5 text-xs flex-wrap">
-                        <span className="text-secondary-text">干扰</span>
-                        {exp.interferenceFlags.map((f) => (
-                          <span key={f} className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10.5px]">
-                            ⚠ {f}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* ── 收盘结果 + 自我复盘 ── */}
-              <OutcomePanel
-                outcome={detail.outcome}
-                assumptions={exp.keyAssumptions ?? []}
-                onSubmitReview={handleSelfReview}
-                isSubmitting={isReviewSubmitting}
-              />
-
-              {/* ── Agent 评价 ── */}
-              <AgentEvalPanel
-                eval_={detail.agentEval}
-                onTrigger={handleTriggerEval}
-                isTriggering={isEvalTriggering}
-              />
-            </div>
-          )}
-        </div>
       </div>
-
-      {/* ── 新建表单 Drawer ── */}
-      <Drawer
-        isOpen={showForm}
-        onClose={() => setShowForm(false)}
-        title="录入今日预期"
-        width="max-w-lg"
-      >
-        <div className="p-5">
-          <ExpectationForm
-            onSubmit={(p) => handleCreate(p as ExpectationCreateRequest)}
-            isSubmitting={isSubmitting}
-            onCancel={() => setShowForm(false)}
-          />
-        </div>
-      </Drawer>
     </div>
   )
 }
