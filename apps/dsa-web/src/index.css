@@ -5,6 +5,11 @@
 /* =========================================
    1. THEME VARIABLES (Base/Classic)
    ========================================= */
+html {
+  /* Compact density: mockup-style scale, all rem-based sizes shrink accordingly */
+  font-size: 14px;
+}
+
 :root {
   /* Typography */
   font-family:
@@ -42,7 +47,7 @@
   --border: 217 28% 84%;
   --input: 217 28% 84%;
   --ring: 193 100% 43%;
-  --radius: 1rem;
+  --radius: 0.625rem;
   --elevated: 0 0% 100%;
   --hover: 214 29% 90%;
   --secondary-text: 224 18% 28%;
@@ -124,7 +129,7 @@
   --nav-active-shadow: hsl(var(--primary) / 0.04);
   --nav-hover-bg: hsl(var(--primary) / 0.05);
   --nav-icon-active: hsl(var(--primary));
-  --nav-item-height: 2.75rem;
+  --nav-item-height: 2.25rem;
   --nav-item-padding-x: 1rem;
   --nav-indicator-width: 0.25rem;
   --nav-indicator-bg: hsl(var(--primary));
@@ -402,7 +407,7 @@
   --nav-active-shadow: hsl(var(--primary) / 0.05);
   --nav-hover-bg: hsl(var(--primary) / 0.06);
   --nav-icon-active: hsl(var(--primary));
-  --nav-item-height: 2.75rem;
+  --nav-item-height: 2.25rem;
   --nav-item-padding-x: 1rem;
   --nav-indicator-width: 0.25rem;
   --nav-indicator-bg: hsl(var(--primary));
@@ -1106,7 +1111,7 @@ textarea {
   --terminal-card-shadow-hover: var(--shadow-soft-card-strong);
   position: relative;
   overflow: hidden;
-  border-radius: 1rem;
+  border-radius: var(--radius);
   border: 1px solid var(--terminal-card-border);
   background: linear-gradient(
     180deg,
@@ -1120,7 +1125,7 @@ textarea {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 1rem;
+  border-radius: var(--radius);
   padding: 1px;
   background: linear-gradient(
     135deg,
@@ -1155,7 +1160,7 @@ textarea {
 
 .gradient-border-card {
   position: relative;
-  border-radius: 1rem;
+  border-radius: var(--radius);
   padding: 1px;
   background: linear-gradient(
     180deg,
@@ -1179,7 +1184,7 @@ textarea {
 .glass-card {
   position: relative;
   overflow: hidden;
-  border-radius: 1rem;
+  border-radius: var(--radius);
   border: 1px solid var(--border-subtle);
   background: hsl(var(--card) / 0.72);
   backdrop-filter: blur(18px);
@@ -1209,7 +1214,7 @@ textarea {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 1rem;
+  border-radius: var(--radius);
   padding: 1px;
   background: linear-gradient(
     135deg,
@@ -1257,7 +1262,7 @@ textarea {
 .dashboard-card {
   position: relative;
   overflow: hidden;
-  border-radius: 1rem;
+  border-radius: var(--radius);
   border: 1px solid var(--border-subtle);
   background: hsl(var(--card) / 0.72);
   backdrop-filter: blur(18px);
@@ -1269,7 +1274,7 @@ textarea {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 1rem;
+  border-radius: var(--radius);
   padding: 1px;
   background: linear-gradient(
     135deg,
@@ -2313,7 +2318,7 @@ textarea {
   background-color: var(--chat-bubble-user-bg);
   color: hsl(var(--foreground) / 0.88);
   border: 1px solid var(--chat-bubble-user-border);
-  border-radius: 1rem;
+  border-radius: var(--radius);
   border-top-right-radius: 0.125rem;
 }
 
@@ -2321,7 +2326,7 @@ textarea {
   background-color: var(--chat-bubble-ai-bg);
   color: hsl(var(--secondary-text) / 0.94);
   border: 1px solid var(--chat-bubble-ai-border);
-  border-radius: 1rem;
+  border-radius: var(--radius);
   border-top-left-radius: 0.125rem;
 }
 

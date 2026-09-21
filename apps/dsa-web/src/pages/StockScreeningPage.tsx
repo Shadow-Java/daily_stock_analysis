@@ -1439,7 +1439,7 @@ const StockScreeningPage: React.FC = () => {
   };
 
   return (
-    <AppPage className="max-w-6xl space-y-6 pb-12 pt-6">
+    <AppPage className="space-y-6 pb-12 pt-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-3">
           <span className="grid h-7 w-7 place-items-center rounded-full border-2 border-cyan text-cyan shadow-[0_0_24px_hsl(var(--primary)/0.18)]">
