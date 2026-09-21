@@ -5,31 +5,33 @@
       <stop offset="0.5" stop-color="#00B8D9"/>
       <stop offset="1" stop-color="#00E0FF"/>
     </linearGradient>
-    <linearGradient id="lineGrad" gradientUnits="userSpaceOnUse" x1="88" y1="360" x2="432" y2="120">
-      <stop offset="0" stop-color="#2F6BFF"/>
-      <stop offset="1" stop-color="#00E0FF"/>
-    </linearGradient>
   </defs>
 
   <g transform="translate(-8,-8)">
-    <!-- 三段上升阶梯（越阶） -->
-    <rect x="72" y="320" width="128" height="56" rx="10" fill="url(#stepGrad)"/>
+    <!-- 三段上升阶梯 -->
+    <rect x="72"  y="320" width="128" height="56" rx="10" fill="url(#stepGrad)"/>
     <rect x="200" y="264" width="128" height="56" rx="10" fill="url(#stepGrad)"/>
     <rect x="328" y="208" width="128" height="56" rx="10" fill="url(#stepGrad)"/>
 
-    <!-- 上扬折线（股价/上涨） -->
-    <path d="M88 360 L184 300 L280 232 L432 120"
-          fill="none" stroke="url(#lineGrad)" stroke-width="22"
+    <!-- 红色曲折走势线 -->
+    <path d="M 88 360
+             L 118 308 L 148 330
+             L 192 278 L 216 296
+             L 260 244 L 284 260
+             L 328 205 L 352 222
+             L 396 170 L 418 186
+             L 432 128"
+          fill="none" stroke="#FF3B5C" stroke-width="22"
           stroke-linecap="round" stroke-linejoin="round"/>
 
-    <!-- AI 数据节点（发光圆点） -->
-    <circle cx="88" cy="360" r="27" fill="#00E0FF" opacity="0.18"/>
-    <circle cx="184" cy="300" r="27" fill="#00E0FF" opacity="0.18"/>
-    <circle cx="280" cy="232" r="27" fill="#00E0FF" opacity="0.18"/>
-    <circle cx="432" cy="120" r="27" fill="#00E0FF" opacity="0.18"/>
-    <circle cx="88" cy="360" r="14" fill="#FFFFFF"/>
-    <circle cx="184" cy="300" r="14" fill="#FFFFFF"/>
-    <circle cx="280" cy="232" r="14" fill="#FFFFFF"/>
-    <circle cx="432" cy="120" r="14" fill="#FFFFFF"/>
+    <!-- 数据节点 -->
+    <circle cx="88"  cy="360" r="27" fill="#FF3B5C" opacity="0.20"/>
+    <circle cx="192" cy="278" r="27" fill="#FF3B5C" opacity="0.20"/>
+    <circle cx="328" cy="205" r="27" fill="#FF3B5C" opacity="0.20"/>
+    <circle cx="432" cy="128" r="27" fill="#FF3B5C" opacity="0.20"/>
+    <circle cx="88"  cy="360" r="14" fill="#FFFFFF"/>
+    <circle cx="192" cy="278" r="14" fill="#FFFFFF"/>
+    <circle cx="328" cy="205" r="14" fill="#FFFFFF"/>
+    <circle cx="432" cy="128" r="14" fill="#FFFFFF"/>
   </g>
 </svg>

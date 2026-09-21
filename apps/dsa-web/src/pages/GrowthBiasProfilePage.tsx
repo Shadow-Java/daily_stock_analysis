@@ -1,4 +1,5 @@
 import { Brain } from 'lucide-react'
+import { PageTabNav } from '../components/common/PageTabNav'
 
 const BIASES = [
   { name: '确认偏差', count: 32, pct: 38, color: '#fc8181', desc: '理由全部支持自己方向，无反例考虑', impact: '含此偏差预期准确率 52%，不含时 78%，差距 26%', tip: '下次提交前，主动写出一条反对自己判断的理由', lastTriggered: '09-18', monthCount: 8, lastMonthCount: 13 },
@@ -26,7 +27,8 @@ function TrendChip({ cur, last }: { cur: number; last: number }) {
 
 export default function GrowthBiasProfilePage() {
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div className="flex flex-col h-full overflow-hidden">
+      <PageTabNav />
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/50 shrink-0">
         <div className="flex items-center gap-2">
           <Brain className="w-4 h-4 text-red-500" />

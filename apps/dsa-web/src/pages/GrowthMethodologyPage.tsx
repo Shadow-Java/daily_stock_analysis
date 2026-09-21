@@ -1,4 +1,5 @@
 import { FileText, Edit2, Download } from 'lucide-react'
+import { PageTabNav } from '../components/common/PageTabNav'
 
 const SECTIONS = [
   {
@@ -59,7 +60,8 @@ const SECTIONS = [
 
 export default function GrowthMethodologyPage() {
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div className="flex flex-col h-full overflow-hidden">
+      <PageTabNav />
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/50 shrink-0">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-green-500" />

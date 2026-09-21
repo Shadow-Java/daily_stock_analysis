@@ -31,6 +31,7 @@ const GrowthMethodologyPage = lazy(() => import('./pages/GrowthMethodologyPage')
 const TradesPage = lazy(() => import('./pages/TradesPage'));
 const ExpectationNewPage = lazy(() => import('./pages/ExpectationNewPage'));
 const ExpectationDetailPage = lazy(() => import('./pages/ExpectationDetailPage'));
+const SentimentPage = lazy(() => import('./pages/SentimentPage'));
 
 const AppContent: React.FC = () => {
   const location = useLocation();
@@ -104,6 +105,7 @@ const AppContent: React.FC = () => {
         <Route path="/growth/bias-profile" element={<GrowthBiasProfilePage />} />
         <Route path="/growth/methodology" element={<GrowthMethodologyPage />} />
         <Route path="/trades" element={<TradesPage />} />
+        <Route path="/sentiment" element={<SentimentPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

@@ -1,38 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="appBg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#0A0F1E"/>
+      <stop offset="0"   stop-color="#0A0F1E"/>
       <stop offset="0.6" stop-color="#0F2242"/>
-      <stop offset="1" stop-color="#123054"/>
+      <stop offset="1"   stop-color="#123054"/>
     </linearGradient>
     <linearGradient id="appStep" gradientUnits="userSpaceOnUse" x1="72" y1="376" x2="456" y2="208">
-      <stop offset="0" stop-color="#4DABFF"/>
-      <stop offset="1" stop-color="#00E0FF"/>
-    </linearGradient>
-    <linearGradient id="appLine" gradientUnits="userSpaceOnUse" x1="88" y1="360" x2="432" y2="120">
-      <stop offset="0" stop-color="#4DABFF"/>
-      <stop offset="1" stop-color="#00E0FF"/>
+      <stop offset="0"   stop-color="#4DABFF"/>
+      <stop offset="1"   stop-color="#00E0FF"/>
     </linearGradient>
   </defs>
 
   <rect width="512" height="512" rx="115" fill="url(#appBg)"/>
 
   <g transform="translate(32,45) scale(0.85)">
-    <rect x="72" y="320" width="128" height="56" rx="10" fill="url(#appStep)"/>
+    <rect x="72"  y="320" width="128" height="56" rx="10" fill="url(#appStep)"/>
     <rect x="200" y="264" width="128" height="56" rx="10" fill="url(#appStep)"/>
     <rect x="328" y="208" width="128" height="56" rx="10" fill="url(#appStep)"/>
 
-    <path d="M88 360 L184 300 L280 232 L432 120"
-          fill="none" stroke="#FFFFFF" stroke-width="20"
+    <!-- 红色曲折走势线 -->
+    <path d="M 88 360
+             L 118 308 L 148 330
+             L 192 278 L 216 296
+             L 260 244 L 284 260
+             L 328 205 L 352 222
+             L 396 170 L 418 186
+             L 432 128"
+          fill="none" stroke="#FF3B5C" stroke-width="20"
           stroke-linecap="round" stroke-linejoin="round"/>
 
-    <circle cx="88" cy="360" r="26" fill="#00E0FF" opacity="0.25"/>
-    <circle cx="184" cy="300" r="26" fill="#00E0FF" opacity="0.25"/>
-    <circle cx="280" cy="232" r="26" fill="#00E0FF" opacity="0.25"/>
-    <circle cx="432" cy="120" r="26" fill="#00E0FF" opacity="0.25"/>
-    <circle cx="88" cy="360" r="13" fill="#FFFFFF"/>
-    <circle cx="184" cy="300" r="13" fill="#FFFFFF"/>
-    <circle cx="280" cy="232" r="13" fill="#FFFFFF"/>
-    <circle cx="432" cy="120" r="13" fill="#FFFFFF"/>
+    <!-- 数据节点 -->
+    <circle cx="88"  cy="360" r="26" fill="#FF3B5C" opacity="0.22"/>
+    <circle cx="192" cy="278" r="26" fill="#FF3B5C" opacity="0.22"/>
+    <circle cx="328" cy="205" r="26" fill="#FF3B5C" opacity="0.22"/>
+    <circle cx="432" cy="128" r="26" fill="#FF3B5C" opacity="0.22"/>
+    <circle cx="88"  cy="360" r="13" fill="#FFFFFF"/>
+    <circle cx="192" cy="278" r="13" fill="#FFFFFF"/>
+    <circle cx="328" cy="205" r="13" fill="#FFFFFF"/>
+    <circle cx="432" cy="128" r="13" fill="#FFFFFF"/>
   </g>
 </svg>

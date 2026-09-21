@@ -1,45 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 240" width="760" height="240">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" width="520" height="160">
   <defs>
-    <linearGradient id="stepGrad" gradientUnits="userSpaceOnUse" x1="72" y1="376" x2="456" y2="208">
-      <stop offset="0" stop-color="#2F6BFF"/>
-      <stop offset="0.5" stop-color="#00B8D9"/>
-      <stop offset="1" stop-color="#00E0FF"/>
-    </linearGradient>
-    <linearGradient id="lineGrad" gradientUnits="userSpaceOnUse" x1="88" y1="360" x2="432" y2="120">
-      <stop offset="0" stop-color="#2F6BFF"/>
-      <stop offset="1" stop-color="#00E0FF"/>
-    </linearGradient>
     <linearGradient id="textGrad" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#00B8D9"/>
       <stop offset="1" stop-color="#2F6BFF"/>
     </linearGradient>
   </defs>
 
-  <!-- 图形 mark -->
-  <g transform="translate(24,48) scale(0.5)">
-    <rect x="72" y="320" width="128" height="56" rx="10" fill="url(#stepGrad)"/>
-    <rect x="200" y="264" width="128" height="56" rx="10" fill="url(#stepGrad)"/>
-    <rect x="328" y="208" width="128" height="56" rx="10" fill="url(#stepGrad)"/>
-    <path d="M88 360 L184 300 L280 232 L432 120"
-          fill="none" stroke="url(#lineGrad)" stroke-width="22"
-          stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="88" cy="360" r="27" fill="#00E0FF" opacity="0.18"/>
-    <circle cx="184" cy="300" r="27" fill="#00E0FF" opacity="0.18"/>
-    <circle cx="280" cy="232" r="27" fill="#00E0FF" opacity="0.18"/>
-    <circle cx="432" cy="120" r="27" fill="#00E0FF" opacity="0.18"/>
-    <circle cx="88" cy="360" r="14" fill="#FFFFFF"/>
-    <circle cx="184" cy="300" r="14" fill="#FFFFFF"/>
-    <circle cx="280" cy="232" r="14" fill="#FFFFFF"/>
-    <circle cx="432" cy="120" r="14" fill="#FFFFFF"/>
-  </g>
-
-  <!-- 字标 -->
-  <text x="290" y="150" font-family="Poppins, Montserrat, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
-        font-size="100" font-weight="700" letter-spacing="-1">
-    <tspan fill="url(#textGrad)">Y</tspan><tspan fill="#0B1220">ueJie</tspan>
+  <text x="20" y="112"
+        font-family="Poppins, Montserrat, 'Segoe UI', sans-serif"
+        font-size="108" font-weight="700" letter-spacing="-2">
+    <tspan fill="url(#textGrad)">Y</tspan><tspan fill="#FFFFFF">ueJie</tspan>
   </text>
 
-  <!-- 副标 -->
-  <text x="292" y="198" font-family="'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif"
-        font-size="30" font-weight="500" letter-spacing="4" fill="#5A6B85">越阶 · 智能炒股</text>
+  <text x="24" y="150"
+        font-family="'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif"
+        font-size="28" font-weight="500" letter-spacing="5" fill="#9FB3D1">越阶 · 智能炒股</text>
 </svg>

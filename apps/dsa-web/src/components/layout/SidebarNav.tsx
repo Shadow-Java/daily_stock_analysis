@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, BarChart3, Bell, BriefcaseBusiness, Gauge, Home, LogOut, MessageSquareQuote, Search, Settings2, Target } from 'lucide-react';
+import { Activity, BarChart3, Bell, BriefcaseBusiness, Gauge, Home, LogOut, MessageSquareQuote, Search, Settings2, Target, Thermometer } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { SCREENING_CONFIG_CHANGED_EVENT, SYSTEM_CONFIG_CHANGED_EVENT, screeningApi } from '../../api/screening';
 import { useAuth } from '../../contexts/AuthContext';
@@ -33,6 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'screening', labelKey: 'layout.nav.screening', to: '/screening', icon: Search },
   { key: 'portfolio', labelKey: 'layout.nav.portfolio', to: '/portfolio', icon: BriefcaseBusiness },
   { key: 'decision-signals', labelKey: 'layout.nav.decisionSignals', to: '/decision-signals', icon: Activity },
+  { key: 'sentiment', labelKey: 'layout.nav.sentiment', to: '/sentiment', icon: Thermometer },
   { key: 'expectations', labelKey: 'layout.nav.expectations', to: '/expectations', icon: Target },
   { key: 'backtest', labelKey: 'layout.nav.backtest', to: '/backtest', icon: BarChart3 },
   { key: 'alerts', labelKey: 'layout.nav.alerts', to: '/alerts', icon: Bell },
@@ -101,17 +102,19 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNav
           collapsed || isRail ? 'justify-center' : ''
         )}
       >
-        <div
-          className={cn(
-            'flex items-center justify-center bg-primary-gradient text-[hsl(var(--primary-foreground))] shadow-[0_12px_28px_var(--nav-brand-shadow)]',
-            isRail ? 'h-9 w-9 rounded-[1rem]' : 'h-10 w-10 rounded-2xl'
-          )}
+        <span
+          style={{
+            fontFamily: "Poppins, Montserrat, 'Segoe UI', sans-serif",
+            fontWeight: 700,
+            fontSize: isRail ? '1.4rem' : '1.15rem',
+            letterSpacing: '-0.5px',
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
         >
-          <BarChart3 className={cn(isRail ? 'h-[19px] w-[19px]' : 'h-5 w-5')} />
-        </div>
-        {!collapsed ? (
-          <p className={cn('min-w-0 truncate font-semibold text-foreground', isRail ? 'text-[0.95rem] leading-none' : 'text-sm')}>OverStep</p>
-        ) : null}
+          <span style={{ background: 'linear-gradient(to right, #00B8D9, #2F6BFF)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Y</span>
+          <span style={{ color: 'hsl(var(--foreground))' }}>ueJie</span>
+        </span>
       </div>
 
       <nav className={cn('flex flex-col gap-1.5', isRail ? '' : 'flex-1')} aria-label={t('layout.mainNav')}>
