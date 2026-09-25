@@ -2399,6 +2399,169 @@ class AkshareFetcher(BaseFetcher):
             logger.warning(f"[Akshare] 获取涨停池失败: {e}")
             return None
 
+    def get_limit_down_pool(
+        self,
+        date: Optional[str] = None,
+        n: int = 20,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """获取跌停池，boards 语义为连续跌停天数（continuous_down_days）。"""
+        import akshare as ak
+
+        query_date = date or datetime.now().strftime('%Y%m%d')
+        try:
+            self._set_random_user_agent()
+            self._enforce_rate_limit()
+
+            logger.info("[API调用] ak.stock_zt_pool_dtgc_em(date=%s) 获取跌停池...", query_date)
+            df = ak.stock_zt_pool_dtgc_em(date=query_date)
+            if df is None or df.empty:
+                return None
+
+            df = df.copy()
+            for col in ('涨跌幅', '最新价', '成交额', '换手率', '封板资金'):
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            rows = self._pool_rows_from_df(
+                df, board_column='连续跌停', board_field='continuous_down_days'
+            )
+            return rows[:n]
+        except Exception as e:
+            logger.warning(f"[Akshare] 获取跌停池失败: {e}")
+            return None
+
+    def get_blown_pool(
+        self,
+        date: Optional[str] = None,
+        n: int = 20,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """获取炸板池（当日曾涨停后打开的股票）。"""
+        import akshare as ak
+
+        query_date = date or datetime.now().strftime('%Y%m%d')
+        try:
+            self._set_random_user_agent()
+            self._enforce_rate_limit()
+
+            logger.info("[API调用] ak.stock_zt_pool_zbgc_em(date=%s) 获取炸板池...", query_date)
+            df = ak.stock_zt_pool_zbgc_em(date=query_date)
+            if df is None or df.empty:
+                return None
+
+            df = df.copy()
+            for col in ('涨跌幅', '最新价', '成交额', '换手率', '封板资金'):
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            rows = self._pool_rows_from_df(df)
+            return rows[:n]
+        except Exception as e:
+            logger.warning(f"[Akshare] 获取炸板池失败: {e}")
+            return None
+
+    def get_market_news(
+        self,
+        n: int = 50,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """获取市场级财经快讯：东财全球财经快讯，失败回退新浪。
+
+        归一化契约：{title, summary, published_at, url, source}。
+        """
+        for provider, fetch in (
+            ('东方财富', self._market_news_em),
+            ('新浪财经', self._market_news_sina),
+        ):
+            try:
+                rows = fetch()
+                if rows:
+                    logger.info("[Akshare] 获取财经快讯成功（%s，%s条）", provider, len(rows))
+                    return rows[:n]
+            except Exception as e:
+                logger.warning(f"[Akshare] 获取财经快讯失败（{provider}）: {e}")
+        return None
+
+    def _market_news_em(self) -> List[Dict[str, Any]]:
+        """东财全球财经快讯（列：标题/摘要/发布时间/链接）。"""
+        import akshare as ak
+
+        self._set_random_user_agent()
+        self._enforce_rate_limit()
+        logger.info("[API调用] ak.stock_info_global_em() 获取全球财经快讯...")
+        df = ak.stock_info_global_em()
+        if df is None or df.empty:
+            return []
+        rows: List[Dict[str, Any]] = []
+        for _, row in df.iterrows():
+            title = str(row.get('标题', '')).strip()
+            if not title:
+                continue
+            rows.append({
+                'title': title,
+                'summary': str(row.get('摘要', '')).strip() or None,
+                'published_at': str(row.get('发布时间', '')).strip() or None,
+                'url': str(row.get('链接', '')).strip() or None,
+                'source': '东方财富',
+            })
+        return rows
+
+    def _market_news_sina(self) -> List[Dict[str, Any]]:
+        """新浪全球财经快讯（列：时间/内容，内容兼作标题与摘要）。"""
+        import akshare as ak
+
+        self._set_random_user_agent()
+        self._enforce_rate_limit()
+        logger.info("[API调用] ak.stock_info_global_sina() 获取全球财经快讯...")
+        df = ak.stock_info_global_sina()
+        if df is None or df.empty:
+            return []
+        rows: List[Dict[str, Any]] = []
+        for _, row in df.iterrows():
+            content = str(row.get('内容', '')).strip()
+            if not content:
+                continue
+            rows.append({
+                'title': content[:80],
+                'summary': content or None,
+                'published_at': str(row.get('时间', '')).strip() or None,
+                'url': None,
+                'source': '新浪财经',
+            })
+        return rows
+
+    @classmethod
+    def _pool_rows_from_df(
+        cls,
+        df: pd.DataFrame,
+        board_column: Optional[str] = None,
+        board_field: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """将东财股池 DataFrame 归一化为统一契约行。
+
+        Args:
+            board_column: 连板/连跌列名（如 '连板数'、'连续跌停'），None 表示该池无此概念
+            board_field: 归一化行中对应的输出字段名
+        """
+        rows: List[Dict[str, Any]] = []
+        for _, row in df.iterrows():
+            item: Dict[str, Any] = {
+                'code': str(row.get('代码', '')).strip(),
+                'name': str(row.get('名称', '')).strip(),
+                'change_pct': cls._safe_float(row.get('涨跌幅')),
+                'price': cls._safe_float(row.get('最新价')),
+                'amount': cls._safe_float(row.get('成交额')),
+                'turnover_rate': cls._safe_float(row.get('换手率')),
+                'seal_amount': cls._safe_float(row.get('封板资金')),
+                'first_limit_time': cls._normalize_limit_time_value(row.get('首次封板时间')),
+                'last_limit_time': cls._normalize_limit_time_value(row.get('最后封板时间')),
+                'break_count': cls._safe_int(row.get('炸板次数')),
+                'limit_stat': str(row.get('涨停统计', '')).strip(),
+                'industry': str(row.get('所属行业', '')).strip(),
+            }
+            if board_column and board_field:
+                item[board_field] = cls._safe_int(row.get(board_column))
+            rows.append(item)
+        return rows
+
     @staticmethod
     def _normalize_limit_time_value(value: Any) -> str:
         """Normalize AkShare HHMMSS-like seal time values to zero-padded HHMMSS."""

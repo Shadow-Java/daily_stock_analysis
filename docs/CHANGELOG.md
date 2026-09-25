@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [测试] 修复股票名称解析冷启动超时并发测试的同步竞态：在放行后台抓取前确认两个等待者均已结束并返回空结果，避免 Docker 发布门禁偶发失败。
 - [文档] 将仓库内所有 SerpApi 链接统一更新为新的赞助转化追踪地址。
 - [修复] 智能导入兼容带 UTF-8 BOM 的 CSV 与剪贴板文本，避免 `code` 表头被误当成数据并丢失有效股票代码。
+- [新功能] Web 大盘情绪页对接真实数据：新增 6 张情绪快照表（启动自动建表迁移）、`/api/v1/market-sentiment/*` 7 个端点（overview/trend/limit-ladder/focus/tomorrow/collect）与收盘采集服务（双维度情绪温度规则版 v1），页面由演示数据切换为快照表 + data_provider 实时数据。
+- [新功能] 大盘情绪页池明细落库提速：新增 `market_pool_detail_snapshot` 表（`pool_type` 区分涨停/跌停/炸板池，启动自动建表），data_provider 补齐 `get_limit_down_pool`/`get_blown_pool` 契约（akshare 跌停/炸板股池实现 + manager 自动 fallback），收盘采集时三类池明细全量入库并回填 `blown_count`/`blown_rate`（短线温度炸板率项随之生效）；`/limit-ladder/today` 改为当日快照优先、支持 `pool_type` 参数、盘中实时兜底，盘后页面加载不再每次实时拉源。
+- [新功能] 大盘情绪页收盘采集补充外盘摘要：采集时经 `DataFetcherManager.get_main_indices(region='us'/'kr')` 拉取美股昨夜（标普/纳指/道指/VIX）与韩股盘中（KOSPI/KOSDAQ）写入 `overseas_summary`，单一市场失败仅记 `overseas_us`/`overseas_kr` 降级不拖垮采集；情绪页外盘卡按市场分组渲染红绿涨跌 chip。
+- [改进] 大盘情绪页对齐 ui-mockup 视觉：情绪演化主轴改为短线/趋势双线单图（网格线、今日虚线、端点白芯圆点、区间高点标记、量能红放绿缩柱状轨迹、阶段标签），仅一天数据也可渲染；双维度情绪演化改为渐变仪表轨道 + 白芯指针 + 5 档阶段标签 + 指标演变轨迹，阶段结论以高亮胶囊与 💡 操作建议（senti-tip）着重突出，并按五档色阶分级（绿→浅绿→琥珀→橙→红，冰点/空头与过热两个极端档深色加粗、中间档常规过渡），温度数字/胶囊/仪表指针/提示阶段名同步档位颜色，💡 提示框五档均带同色系色底；趋势情绪卡指标改为上证指数（占位）、涨跌家数、新高/新低、成交额、两融余额（占位）；「涨停梯队演化」更名「涨停聚焦」，新增涨停/跌停个股池 tab 与层级下钻导航（高度档从高到低、板块按家数从多到少横排按钮，默认选中第一档，点击切换展开该档个股富信息行卡片，含板数徽章/代码名称/行业/涨跌幅/封单/首封时间/开板次数/涨停统计/写入预期入口），跌停池撬板次数改为未撬开（0次）也展示并以「撬板」文案区分、撬板>0 琥珀色加重。
+- [新功能] 大盘情绪页周热点事件落库：新增市场级财经快讯数据源 `get_market_news`（东财全球财经快讯，失败回退新浪），收盘采集时按当日快讯规则打标（标题/摘要命中热点板块与涨停池行业词 → related_sectors；政策/业绩/宏观/新闻关键词 → event_type；正负情绪词计分 → sentiment 与影响标签），写入 `market_focus_events`（scope=week，每日上限 20 条，按事件日+标题幂等跳过），快讯全部失败仅记 `focus_events` 降级；修复「市场聚焦演化」事件 tab 因采集从未落库而始终为空。
+- [修复] 大盘情绪页 `_load_json` 对 JSON `'null'` 字符串归位到 default 值：事件行 related_sectors/related_stocks 存量 `'null'` 读取时穿透 None 导致 `/focus` 接口 500；写入侧关联字段空值改为空列表，读取侧 `'null'` 解析结果为 None 时返回 default。
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->

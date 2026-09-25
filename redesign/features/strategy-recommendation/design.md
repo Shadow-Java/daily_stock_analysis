@@ -2,7 +2,7 @@
 
 > 生成日期：2026-09-22
 > 目标：用户能自定义策略 → 决策信号经过该策略 → AI 实时推荐「板块 + 个股」。
-> 前置：本目录 `../决策信号/decision-signal.md`（决策信号逻辑）、`../决策信号/owner-signal.md`（用户自有信号）、`../../server/data-source/realtime-data-plan.md`（实时数据方案）。
+> 前置：同功能域 `../trading-growth/decision-signal.md`（决策信号逻辑）、`../trading-growth/owner-signal.md`（用户自有信号）、`../../platform/data-source/realtime-data-plan.md`（实时数据方案）。
 > 现状代码：`strategies/*.yaml`（自然语言策略）、`src/agent/skills/`（引擎/路由/调度）、`src/storage.py` 的 `decision_signals` 表。
 
 ---
@@ -35,12 +35,12 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                    feture-ui 大盘情绪 / 推荐页                    │
+│                    redesign 大盘情绪 / 推荐页                    │
 │       (板块 TopN · 个股 TopN · 每条: 策略依据+置信度+性价比)         │
 └───────────────────────────────┬──────────────────────────────┘
                                 │ SSE / REST (读缓存)
 ┌───────────────────────────────▼──────────────────────────────┐
-│              实时推荐服务 (feture-ui/server，新增)                │
+│              实时推荐服务 (redesign/server，新增)                │
 │  · 推荐调度器：盘中分钟级 tick + 盘后快照                          │
 │  · 候选池构建 · 分层扫描 · 板块聚合 · 排序 · 落库                  │
 └───────┬──────────────────────────────┬───────────────────────┘
@@ -93,7 +93,7 @@ instructions: |
   ...
 ```
 
-用户侧体验（feture-ui）：
+用户侧体验（redesign）：
 - 「策略库」页：可视化新建/编辑策略（表单 + 自然语言描述，底层仍存 YAML）。
 - 每个策略有开关：`参与实时推荐 / 仅用于单股分析`。
 - 支持绑定「自选股池」作为 `universe: watchlist`。
@@ -143,7 +143,7 @@ instructions: |
 │     每条附带：策略依据（哪些策略命中）、置信度、性价比（entry vs stop/target）
 ├─ 7. 落库 + 推送：
 │     写入 recommendation_snapshot / recommendation_item（见下）
-│     通过 SSE 推送到 feture-ui，前端实时刷新
+│     通过 SSE 推送到 redesign，前端实时刷新
 └─ 8. 盘后快照：15:30 存当日推荐 + 情绪轨迹，供「近 N 日」回看
 ```
 
@@ -157,7 +157,7 @@ instructions: |
 4. **策略自学习（阶段 3）**：
    - 统计每个策略的「命中胜率」（对接 `decision_signal_outcomes` 前向验证）。
    - 命中率高的策略在聚合时权重上调；连续失效的策略提示用户降权/停用。
-   - 结合 `../决策信号/decision-signal.md` 的「情绪一致性打分」，AI 反向给用户的操作习惯打分。
+   - 结合 `../trading-growth/decision-signal.md` 的「情绪一致性打分」，AI 反向给用户的操作习惯打分。
 
 ---
 
@@ -203,7 +203,7 @@ instructions: |
 
 1. **策略扫描配置**（`strategies/*.yaml` + `src/agent/skills/base.py`）：
    - `Skill` 定义增加可选 `scan` 字段（universe/filters/ranking/output/horizon）解析。
-2. **推荐服务**（`feture-ui/server` 或 `src/recommendation/`）：
+2. **推荐服务**（`redesign/server` 或 `src/recommendation/`）：
    - `RecommendationScheduler`：分钟级 tick + 盘后快照。
    - `CandidatePoolBuilder`：候选池构建。
    - `LayeredScanner`：规则粗筛 → LLM 精评（调用现有 SkillAgent/Scheduler）。
@@ -211,9 +211,9 @@ instructions: |
    - `Recommender`：排序 + 性价比计算 + 落库。
 3. **存储**（`src/storage.py`）：
    - 新增 4 张表（见上）+ `decision_signals` 增加 `target_type` 列迁移。
-4. **API + 推送**（`feture-ui/server`）：
+4. **API + 推送**（`redesign/server`）：
    - REST 读推荐快照 + SSE 推送更新（不经过 agent 工具文本链路，直接 Pydantic JSON）。
-5. **前端**（`feture-ui`）：
+5. **前端**（`redesign`）：
    - 策略库页（可视化编辑 YAML）+ 推荐页（板块/个股榜单，红涨绿跌）。
 
 ---

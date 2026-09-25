@@ -1,8 +1,8 @@
 # 数据源审计 —— 大盘情绪页需求 vs 现有数据层
 
 > 生成日期：2026-09-21
-> 结论：`feture-ui/server` 目前是空目录（未来 UI 后端的占位）。真正的数据层在项目根 `data_provider/`，且已有 `DataFetcherManager` 统一门面（fan-out 到多个数据源）。
-> 设计稿位置：`feture-ui/design/ui-design.md`（v0.4）
+> 结论：原 `feture-ui/server` 占位目录已随重构移除。真正的数据层在项目根 `data_provider/`，且已有 `DataFetcherManager` 统一门面（fan-out 到多个数据源）。
+> 设计稿位置：`redesign/features/market-sentiment/ui-design.md`（v0.4）
 
 ---
 
@@ -90,4 +90,4 @@ Agent 实际暴露的工具清单（`src/agent/tools/`）：
 
 - `get_limit_up_pool`（涨停池）、`get_market_stats`（涨跌家数/成交额）、`get_concept_rankings`（概念）、`get_hot_stocks`（热股）、`get_dragon_tiger_context`（龙虎榜）**在 `DataFetcherManager` 上都已实现**，但目前**只在 pipeline / market_analyzer 内部使用，没有包装成 agent tool**。
 - Agent 要调用它们，需要仿照 `market_tools.py` 的写法，逐个包装成 `ToolDefinition`（含 `_handle_*` + 参数 schema + policy）并注册进 `ToolRegistry`。
-- 大盘情绪页（feture-ui）如果希望由 agent 提供数据，需要新增一组「市场情绪类」工具：`get_limit_up_pool` / `get_market_stats` / `get_concept_rankings` / `get_hot_stocks` / `get_dragon_tiger_context`，以及补齐炸板池/跌停池/昨日涨停/两融/外盘 SOX·金龙等缺口后再封装。
+- 大盘情绪页（redesign）如果希望由 agent 提供数据，需要新增一组「市场情绪类」工具：`get_limit_up_pool` / `get_market_stats` / `get_concept_rankings` / `get_hot_stocks` / `get_dragon_tiger_context`，以及补齐炸板池/跌停池/昨日涨停/两融/外盘 SOX·金龙等缺口后再封装。

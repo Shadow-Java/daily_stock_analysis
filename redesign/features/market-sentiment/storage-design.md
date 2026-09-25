@@ -1,6 +1,6 @@
 # 存储设计 — 预期管理 & 大盘情绪页
 
-> 基于 `feture-ui/design/ui-mockup.html`、`storage-audit.md`、`src/storage.py` 现状整理。
+> 基于 `redesign/design/ui-mockup.html`、`../../platform/storage/storage-audit.md`、`src/storage.py` 现状整理。
 > 存储引擎：SQLite（`data/stock_analysis.db`，WAL 模式），与现有 40+ 张表共存。
 
 ---
@@ -464,7 +464,46 @@ CREATE TABLE market_tomorrow_focus (
 
 ---
 
-### 2.8 大盘情绪页 API 读写路径
+### 2.8 新增表：`market_pool_detail_snapshot`
+
+**每日 15:30 采集三类池明细**（涨停池 / 跌停池 / 炸板池，`pool_type` 区分）。
+一次采集全量落库，情绪页「今日梯队」盘后直接读本表，避免每次实时拉源。
+
+```sql
+CREATE TABLE market_pool_detail_snapshot (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  trade_date       DATE    NOT NULL,
+  pool_type        TEXT    NOT NULL,   -- 'limit_up' | 'limit_down' | 'blown'
+
+  stock_code       TEXT    NOT NULL,
+  stock_name       TEXT,
+  industry         TEXT,
+
+  -- 通用行情字段（三类池视数据源字段可为 NULL）
+  chg_pct          REAL,
+  price            REAL,
+  amount           REAL,             -- 成交额
+  turnover_rate    REAL,
+  seal_amount      REAL,             -- 封板资金
+  first_limit_time TEXT,             -- HHMMSS
+  last_limit_time  TEXT,             -- HHMMSS
+  break_count      INTEGER,          -- 炸板次数
+  limit_stat       TEXT,             -- 涨停/跌停统计（如 "3/2"）
+  boards           INTEGER,          -- 涨停池=连板数；跌停池=连续跌停天数；炸板池=NULL
+  sort_order       INTEGER DEFAULT 0,-- 数据源原始排序
+
+  collected_at     DATETIME,
+
+  UNIQUE(trade_date, pool_type, stock_code),
+  CHECK (pool_type IN ('limit_up', 'limit_down', 'blown'))
+);
+
+CREATE INDEX idx_mpds_date_type ON market_pool_detail_snapshot(trade_date, pool_type);
+```
+
+---
+
+### 2.9 大盘情绪页 API 读写路径
 
 | UI 区域 | 操作 | 涉及表 / 接口 |
 |---|---|---|
@@ -472,7 +511,7 @@ CREATE TABLE market_tomorrow_focus (
 | 情绪演化 — 今日数据面板 | 读最新 | `market_daily_snapshot`（is_complete=1） |
 | 情绪演化 — 实时行情条（开盘中） | 实时拉取 | `data_provider/` 接口（不落库） |
 | 涨停梯队演化 — 近5日轨迹 | 读历史 | `market_limit_ladder_snapshot` |
-| 涨停梯队演化 — 今日详情 | 读最新 | `market_limit_ladder_snapshot` + `data_provider/get_limit_up_pool` |
+| 池详情（涨停/跌停/炸板，`pool_type` 参数） | 当日快照优先 | `market_pool_detail_snapshot`；无当日数据时实时拉 `data_provider` 兜底，实时为空再回退该池最近交易日 |
 | 周聚焦 — 热点事件 | 读 | `market_focus_events` WHERE scope='week' |
 | 周聚焦 — 焦点个股 | 读 | `market_focus_stocks` WHERE scope='week' |
 | 周聚焦 — 热点板块 | 读 | `market_focus_sectors` WHERE scope='week' |
@@ -490,6 +529,9 @@ CREATE UNIQUE INDEX uix_mds_date   ON market_daily_snapshot(trade_date);
 
 -- market_limit_ladder_snapshot
 CREATE UNIQUE INDEX uix_mlls_date  ON market_limit_ladder_snapshot(trade_date);
+
+-- market_pool_detail_snapshot
+CREATE UNIQUE INDEX uix_mpds_date_type_code ON market_pool_detail_snapshot(trade_date, pool_type, stock_code);
 
 -- market_focus_events
 CREATE INDEX idx_mfe_scope_date    ON market_focus_events(scope, event_date DESC);
@@ -525,6 +567,7 @@ CREATE UNIQUE INDEX uix_emc_exp_id ON expectation_market_context(expectation_id)
   └── 15:30 收盘后完整快照
         ├── market_daily_snapshot (is_complete=1) 写入或更新
         ├── market_limit_ladder_snapshot 写入
+        ├── market_pool_detail_snapshot 涨停/跌停/炸板三类池明细刷新
         ├── market_focus_stocks (scope='week') 刷新当日数据
         ├── market_focus_sectors (scope='week') 刷新当日数据
         ├── market_focus_events (scope='week') 追加新事件
@@ -540,6 +583,7 @@ CREATE UNIQUE INDEX uix_emc_exp_id ON expectation_market_context(expectation_id)
 |---|---|---|
 | 大盘情绪时序 | 无 | `market_daily_snapshot`（唯一时序底表） |
 | 涨停梯队历史 | 无 | `market_limit_ladder_snapshot` |
+| 池明细（涨停/跌停/炸板） | 无 | `market_pool_detail_snapshot`（pool_type 区分，盘后读路径数据源） |
 | 市场聚焦内容 | 无 | `market_focus_events / stocks / sectors` |
 | 明日重点 | 无 | `market_tomorrow_focus` |
 | 预期 — 原则库 | 无 | `user_trading_principles`（原则文本） |

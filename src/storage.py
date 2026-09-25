@@ -1386,6 +1386,7 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             self._ensure_schema_migration_record()
             self._ensure_intelligence_items_unique_index()
             self._ensure_expectation_schema()
+            self._ensure_market_sentiment_schema()
 
             self._initialized = True
             logger.info(f"数据库初始化完成: {db_url}")
@@ -2157,6 +2158,24 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                     logger.info("预期管理表已创建: %s", model.__tablename__)
         except Exception as exc:
             logger.warning("预期管理 Schema 检查失败，已跳过: %s", exc)
+
+    def _ensure_market_sentiment_schema(self) -> None:
+        """确保大盘情绪页六张表存在（旧库自动建表）。"""
+        try:
+            for model in (
+                MarketDailySnapshotRecord,
+                MarketLimitLadderSnapshotRecord,
+                MarketPoolDetailSnapshotRecord,
+                MarketFocusEventRecord,
+                MarketFocusStockRecord,
+                MarketFocusSectorRecord,
+                MarketTomorrowFocusRecord,
+            ):
+                if not inspect(self._engine).has_table(model.__tablename__):
+                    model.__table__.create(self._engine)
+                    logger.info("大盘情绪表已创建: %s", model.__tablename__)
+        except Exception as exc:
+            logger.warning("大盘情绪 Schema 检查失败，已跳过: %s", exc)
 
     @classmethod
     def get_instance(cls) -> 'DatabaseManager':
@@ -4486,6 +4505,251 @@ class ExpectationAgentEvalRecord(Base):
             name='ck_agent_eval_type',
         ),
     )
+
+
+# ============================================================
+# 大盘情绪页 ORM 模型
+# ============================================================
+
+class MarketDailySnapshotRecord(Base):
+    """每日大盘情绪快照（收盘后采集），情绪页时序底表。"""
+
+    __tablename__ = 'market_daily_snapshot'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_date = Column(Date, nullable=False, unique=True, index=True)
+
+    # 两市量能
+    total_amount = Column(Float)              # 两市合计成交额（亿元）
+    sh_amount = Column(Float)                 # 沪市成交额（亿元）
+    sz_amount = Column(Float)                 # 深市成交额（亿元）
+    amount_vs_prev = Column(Float)            # 较前日变化率（%），正=放量
+
+    # 涨跌统计
+    up_count = Column(Integer)
+    down_count = Column(Integer)
+    flat_count = Column(Integer)
+    limit_up_count = Column(Integer)
+    limit_down_count = Column(Integer)
+    blown_count = Column(Integer)             # 炸板家数（数据源缺失时为 NULL）
+    blown_rate = Column(Float)                # 炸板率 = blown / (limit_up + blown)，%
+
+    # 双维度情绪温度（0~100）
+    sentiment_st = Column(Integer)            # 短线情绪温度
+    sentiment_trend = Column(Integer)         # 趋势情绪温度
+
+    # 资金
+    main_inflow = Column(Float)               # 全市场主力净流入（亿元）
+    north_inflow = Column(Float)              # 北向净流入（亿元）
+
+    # 指数收盘缓存
+    hs300_close = Column(Float)
+    hs300_chg_pct = Column(Float)
+    sh50_chg_pct = Column(Float)
+    chinext_chg_pct = Column(Float)
+
+    # 60日新高新低
+    new_high_60d = Column(Integer)
+    new_low_60d = Column(Integer)
+
+    # 外盘摘要 JSON: {"spx_chg":0.3,"ndx_chg":0.5,"vix":18.2,...}
+    overseas_summary = Column(Text)
+
+    # 快照状态：1=收盘后完整快照，0=盘中或未采集
+    is_complete = Column(Integer, nullable=False, default=0)
+    collected_at = Column(DateTime)
+
+    __table_args__ = (
+        CheckConstraint("is_complete IN (0, 1)", name='ck_mds_is_complete'),
+    )
+
+
+class MarketLimitLadderSnapshotRecord(Base):
+    """每日涨停梯队快照（收盘后采集）。"""
+
+    __tablename__ = 'market_limit_ladder_snapshot'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_date = Column(Date, nullable=False, unique=True, index=True)
+
+    # 各高度板家数
+    height_1 = Column(Integer)                # 首板家数
+    height_2 = Column(Integer)
+    height_3 = Column(Integer)
+    height_4 = Column(Integer)
+    height_5plus = Column(Integer)            # 五板及以上
+
+    # 空间板
+    max_height = Column(Integer)
+    max_height_code = Column(String(16))
+    max_height_name = Column(String(64))
+
+    ladder_complete = Column(Integer)         # 1=梯队完整，0=断层
+
+    # 首封时间分布 JSON: {"925": 5, "930": 12, ...}
+    first_seal_dist = Column(Text)
+    # 板块分布 Top5 JSON: [{"sector": "固态电池", "count": 5}]
+    sector_dist = Column(Text)
+
+    # 昨日涨停板今日表现
+    prev_limit_up_total = Column(Integer)
+    prev_limit_up_again = Column(Integer)
+    prev_limit_up_blown = Column(Integer)
+    prev_limit_up_down = Column(Integer)
+
+    collected_at = Column(DateTime)
+
+    __table_args__ = (
+        CheckConstraint(
+            "ladder_complete IS NULL OR ladder_complete IN (0, 1)",
+            name='ck_mlls_ladder_complete',
+        ),
+    )
+
+
+class MarketFocusEventRecord(Base):
+    """市场聚焦热点事件（周聚焦 / 月聚焦）。"""
+
+    __tablename__ = 'market_focus_events'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_date = Column(Date, nullable=False, index=True)
+    scope = Column(String(8), nullable=False, default='week')   # 'week' | 'month'
+
+    title = Column(Text, nullable=False)
+    source = Column(String(128))
+    event_type = Column(String(16))           # 'policy'|'earnings'|'news'|'macro'|'block'
+    sentiment = Column(String(16))            # 'positive'|'negative'|'neutral'
+
+    related_sectors = Column(Text)            # JSON list
+    related_stocks = Column(Text)             # JSON list
+
+    impact_label = Column(String(64))
+    impact_magnitude = Column(String(8))      # 'high'|'medium'|'low'
+    summary = Column(Text)
+
+    created_at = Column(DateTime, default=utc_naive_now)
+
+    __table_args__ = (
+        Index('idx_mfe_scope_date', 'scope', 'event_date'),
+        CheckConstraint("scope IN ('week', 'month')", name='ck_mfe_scope'),
+    )
+
+
+class MarketFocusStockRecord(Base):
+    """焦点个股（周聚焦 / 月聚焦），每日刷新。"""
+
+    __tablename__ = 'market_focus_stocks'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_date = Column(Date, nullable=False, index=True)
+    scope = Column(String(8), nullable=False, default='week')
+
+    stock_code = Column(String(16), nullable=False)
+    stock_name = Column(String(64))
+    concept_tags = Column(Text)               # JSON list
+    boards = Column(Integer)                  # 连板数，0=非连板
+    reason = Column(Text)
+
+    chg_pct = Column(Float)
+    turnover_rate = Column(Float)
+    main_inflow = Column(Float)
+
+    dragon_tiger = Column(Integer, default=0)  # 1=上榜龙虎榜
+    inst_buy = Column(Integer, default=0)      # 1=机构席位买入
+
+    __table_args__ = (
+        UniqueConstraint(
+            'trade_date', 'scope', 'stock_code', name='uix_mfs_date_scope_code'
+        ),
+        CheckConstraint("scope IN ('week', 'month')", name='ck_mfs_scope'),
+    )
+
+
+class MarketFocusSectorRecord(Base):
+    """热点板块（周聚焦 / 月聚焦），每日刷新。"""
+
+    __tablename__ = 'market_focus_sectors'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_date = Column(Date, nullable=False, index=True)
+    scope = Column(String(8), nullable=False, default='week')
+
+    sector_name = Column(String(64), nullable=False)
+    chg_pct = Column(Float)
+    main_inflow = Column(Float)
+    leader_code = Column(String(16))
+    leader_name = Column(String(64))
+
+    limit_up_trend = Column(Text)             # JSON: [1,3,5,7,7]
+    lifecycle_stage = Column(String(8))       # 'new'|'hot'|'fading'|'dead'
+    lifecycle_day = Column(Integer)
+
+    __table_args__ = (
+        UniqueConstraint(
+            'trade_date', 'scope', 'sector_name', name='uix_mfsec_date_scope_name'
+        ),
+        CheckConstraint("scope IN ('week', 'month')", name='ck_mfsec_scope'),
+    )
+
+
+class MarketPoolDetailSnapshotRecord(Base):
+    """每日池明细快照（收盘后采集），pool_type 区分涨停/跌停/炸板池。
+
+    一次采集全量落库，情绪页"今日梯队"盘后直接读本表，避免每次实时拉源。
+    """
+
+    __tablename__ = 'market_pool_detail_snapshot'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_date = Column(Date, nullable=False, index=True)
+    pool_type = Column(String(16), nullable=False)   # 'limit_up' | 'limit_down' | 'blown'
+
+    stock_code = Column(String(16), nullable=False)
+    stock_name = Column(String(64))
+    industry = Column(String(64))
+
+    # 通用行情字段（三类池均可为 NULL，视数据源字段而定）
+    chg_pct = Column(Float)
+    price = Column(Float)
+    amount = Column(Float)                    # 成交额
+    turnover_rate = Column(Float)
+    seal_amount = Column(Float)               # 封板资金
+    first_limit_time = Column(String(8))      # HHMMSS
+    last_limit_time = Column(String(8))       # HHMMSS
+    break_count = Column(Integer)             # 炸板次数
+    limit_stat = Column(String(32))           # 涨停/跌停统计（如 "3/2"）
+    boards = Column(Integer)                  # 涨停池=连板数；跌停池=连续跌停天数；炸板池=NULL
+    sort_order = Column(Integer, default=0)   # 数据源原始排序（读路径还原展示顺序）
+
+    collected_at = Column(DateTime)
+
+    __table_args__ = (
+        UniqueConstraint(
+            'trade_date', 'pool_type', 'stock_code', name='uix_mpds_date_type_code'
+        ),
+        CheckConstraint(
+            "pool_type IN ('limit_up', 'limit_down', 'blown')",
+            name='ck_mpds_pool_type',
+        ),
+        Index('idx_mpds_date_type', 'trade_date', 'pool_type'),
+    )
+
+
+class MarketTomorrowFocusRecord(Base):
+    """明日重点聚焦，每日收盘后生成一条，预测下一交易日。"""
+
+    __tablename__ = 'market_tomorrow_focus'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    for_date = Column(Date, nullable=False, unique=True, index=True)
+
+    key_events = Column(Text)                 # JSON array
+    sector_watch = Column(Text)               # JSON array
+    stock_watch = Column(Text)                # JSON array
+    ai_preview = Column(Text)                 # 一句话 AI 前瞻
+
+    generated_at = Column(DateTime, default=utc_naive_now)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 # 项目架构总结（daily_stock_analysis）
 
 > 日期：2026-09-21
-> 目的：梳理主项目各层级职责，作为 `feture-ui`（新前端 / 新 server）开发时的参考地图。
+> 目的：梳理主项目各层级职责，作为 `redesign`（新前端 / 新 server）开发时的参考地图。
 
 ## 〇、整体分层图
 
@@ -127,7 +127,7 @@
 
 ---
 
-## 附：与新 feture-ui/server 的关系（可复用点）
+## 附：与新 redesign/server 的关系（可复用点）
 
 1. **不必重写 agent**：主项目 `api/v1` 已暴露 agent/分析/预期/持仓等全部能力，新 server 若只做 BFF/聚合，直接透传 `/api/v1/*` 即可
 2. **可复用的模型网关**：`src/llm/`（litellm_backend）可独立 import，新 server 需要自己的 LLM 调用时优先复用而非重接 SDK

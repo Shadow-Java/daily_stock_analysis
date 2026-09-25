@@ -2,7 +2,7 @@
 
 > 版本: v0.4
 > 日期: 2026-09-21
-> 关联文档: [expectation-management.md](../stock/expectation-management.md) · [personal-trading-growth-system.md](../stock/personal-trading-growth-system.md)
+> 关联文档: [expectation-management.md](./expectation-management.md) · [personal-trading-growth-system.md](../trading-growth/system.md)
 
 ---
 

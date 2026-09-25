@@ -1,484 +1,846 @@
 // 大盘情绪页 — /sentiment
-// 设计参考：feture-ui/design/ui-design.md § 6
-import { useState } from 'react'
-import { Thermometer, AlertTriangle, ChevronRight, Plus } from 'lucide-react'
+// 设计参考：redesign/features/market-sentiment/ui-design.md § 6
+// 数据来源：/api/v1/market-sentiment/*（快照表 + data_provider 实时）
+import { useEffect, useMemo, useState } from 'react'
+import { Thermometer, AlertTriangle, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { cn } from '../utils/cn'
+import {
+  sentimentApi,
+  type SentimentOverview,
+  type SentimentOverseas,
+  type SentimentTrendPoint,
+  type LadderPoint,
+  type LadderTodayResponse,
+  type FocusResponse,
+  type FocusScope,
+  type TomorrowFocus,
+  type LimitUpPoolItem,
+  type PoolType,
+} from '../api/sentiment'
 
-// ─── 演示数据 ────────────────────────────────────────────────────
+// ─── 小工具 ──────────────────────────────────────────────────────
 
-const DAYS = ['09-10','09-11','09-12','09-13','09-16','09-17','09-18','09-19','09-20','09-21']
-
-// 短线温度（近10日）
-const SHORT_TEMPS  = [45, 52, 60, 71, 78, 65, 52, 38, 32, 32]
-// 趋势温度（近10日）
-const TREND_TEMPS  = [55, 57, 58, 60, 62, 61, 61, 61, 61, 61]
-// 成交额（万亿）
-const VOLUMES      = [1.28, 1.35, 1.41, 1.38, 1.30, 1.25, 1.22, 1.20, 1.18, 1.18]
-// 涨停梯队高度（近5日）
-const HEIGHTS      = [6, 4, 3, 3, 3]
-// 涨停家数（近5日）
-const LIMIT_UP     = [42, 38, 31, 26, 19]
-
-const STAGE_LABELS: Record<string, { label: string; day: string; color: string }> = {
-  '09-16': { label: '冰点',  day: '09-16', color: 'text-blue-400' },
-  '09-17': { label: '启动',  day: '09-17', color: 'text-green-400' },
-  '09-19': { label: '高潮',  day: '09-19', color: 'text-red-400' },
-  '09-21': { label: '退潮',  day: '09-21', color: 'text-amber-400' },
+function fmtPct(v: number | null | undefined, digits = 1): string {
+  if (v === null || v === undefined || Number.isNaN(v)) return '—'
+  return `${v > 0 ? '+' : ''}${v.toFixed(digits)}%`
 }
 
-const LIMIT_UP_LIST = [
-  { code: '600713', name: 'XX股份',   boards: 3, sector: '算力租赁', role: '龙头', feature: '空间龙头·带领板块', seal: '0.8亿', time: '13:05', note: '弱转强', catalyst: '中标智算中心项目' },
-  { code: '300424', name: 'XX能源',   boards: 2, sector: '固态电池', role: '龙头', feature: '带领板块上涨',       seal: '1.2亿', time: '10:02', note: '一字板', catalyst: '工信部固态电池路线图' },
-  { code: '002480', name: 'XX装备',   boards: 2, sector: '固态电池', role: '小弟', feature: '',                  seal: '0.3亿', time: '13:20', note: '',      catalyst: '' },
-  { code: '300831', name: 'XX科技',   boards: 2, sector: 'CPO·光模块', role: '龙头', feature: '孤立龙头',        seal: '0.5亿', time: '10:22', note: '',      catalyst: '' },
-  { code: '600922', name: 'XX数据',   boards: 2, sector: '算力租赁', role: '小弟', feature: '',                  seal: '0.2亿', time: '14:35', note: '尾盘板', catalyst: '' },
-]
+function fmtVol(v: number | null | undefined): string {
+  // 亿元 → 万亿
+  if (v === null || v === undefined) return '—'
+  return `${(v / 10000).toFixed(2)}万亿`
+}
 
-const LIMIT_BLOWN = [
-  { code: '600514', name: 'XX控股', sector: '固态电池', peak: '+7.2%', close: '+2.1%' },
-  { code: '000785', name: 'XX材料', sector: '半导体',   peak: '+9.8%', close: '+1.3%' },
-]
+function fmtSealTime(hhmmss: string): string {
+  if (!hhmmss || hhmmss.length < 4) return '—'
+  return `${hhmmss.slice(0, 2)}:${hhmmss.slice(2, 4)}`
+}
 
-const EVENTS = [
-  { time: '10:02', type: '政策', signal: 'bull', title: '工信部发布固态电池标准路线图，明确 2027 量产目标', sectors: ['固态电池','锂矿'], life: '🆕 今日首发', lifeStage: 'new', bg: '退潮期 × 利好 → 利好钝化，防高开低走', stocks: [{ code: '300424', pct: '+20.0%' }, { code: '002480', pct: '+10.0%' }] },
-  { time: '09-19 15:30', type: '产业', signal: 'bull', title: '头部算力厂商宣布新一轮 GPU 集群扩容计划', sectors: ['算力租赁'], life: '🔥 发酵中（第3天）', lifeStage: 'hot', bg: '退潮期 × 延续热点 → 主线分化，龙头续涨但跟风炸板', stocks: [{ code: '600713', pct: '+10.0%' }, { code: '600922', pct: '+5.1%' }] },
-  { time: '09-18 14:00', type: '海外', signal: 'bear', title: '美国发布新一批半导体设备出口管制清单', sectors: ['半导体设备'], life: '🧊 退潮（第2天）', lifeStage: 'cool', bg: '利空已部分消化，板块开始企稳', stocks: [{ code: '688819', pct: '-3.2%' }] },
-]
+function fmtDay(d: string): string {
+  // '2026-09-25' → '9月25日'
+  const md = d.slice(5)
+  const [m, day] = md.split('-')
+  return `${parseInt(m, 10)}月${parseInt(day, 10)}日`
+}
 
-const FOCUS_STOCKS = [
-  { code: '300XXX', name: 'XX电力',  pct: '+19.9%', vol: '82亿', sector: '算力租赁', days: 3, trend: 'up',   reason: '三日两现机构专用席位买入，叠加热点空间板带动' },
-  { code: '600713', name: 'XX股份',  pct: '+10.0%', vol: '38亿', sector: '算力租赁', days: 2, trend: 'flat', reason: '连续入选龙虎榜，今日卡位新高度' },
-  { code: '300424', name: 'XX能源',  pct: '+20.0%', vol: '65亿', sector: '固态电池', days: 1, trend: 'new',  reason: '今日政策催化首板，封单强劲，为首发龙头' },
-  { code: '688819', name: 'XX设备',  pct: '-3.2%',  vol: '12亿', sector: '半导体设备', days: 0, trend: 'out', reason: '昨日上榜，今日受出口管制影响出局' },
-]
+// 仪表 5 档标签（对齐 ui-mockup：冰点/低迷/中性/活跃/过热 · 空头/弱势/中性/强势/过热）
+function shortStage5(st: number | null): string {
+  if (st === null) return '—'
+  if (st >= 80) return '过热'
+  if (st >= 60) return '活跃'
+  if (st >= 40) return '中性'
+  if (st >= 20) return '低迷'
+  return '冰点'
+}
 
-const HOT_SECTORS = [
-  { name: '固态电池', pct: '+4.2%', flow: '+23.4亿', leader: '300424', hist: [1,3,5,7,7] },
-  { name: '算力租赁', pct: '+3.1%', flow: '+18.2亿', leader: '600713', hist: [1,3,4,5,5] },
-  { name: '半导体设备', pct: '-1.8%', flow: '-5.6亿', leader: '688819', hist: [5,3,2,1,0] },
-]
+function trendStage5(v: number | null): string {
+  if (v === null) return '—'
+  if (v >= 80) return '过热'
+  if (v >= 60) return '强势'
+  if (v >= 40) return '中性'
+  if (v >= 20) return '弱势'
+  return '空头'
+}
+
+const SHORT_COLOR = '#dd6b20'   // 短线情绪（mockup 橙）
+const TREND_COLOR = '#00b8d9'   // 趋势情绪（mockup 青）
+
+// 阶段色阶：绿 → 浅绿 → 琥珀 → 橙 → 红；两个极端档（最冷/最热）加重（深色 + font-extrabold），
+// 中间档常规字重 + 浅底色，形成平滑过渡（A 股语义：红 = 热/多，绿 = 冷/空）
+interface StageStyle {
+  tempCls: string     // 卡片大号温度数字
+  pillCls: string     // 阶段结论胶囊
+  textCls: string     // 结论提示中的阶段名
+  tipCls: string      // 💡 结论提示框色底（五档全突出，靠颜色区分情绪）
+  markerColor: string // 仪表指针边框
+}
+
+const _COLD_EXTREME: StageStyle = {
+  tempCls: 'text-[#38a169] font-extrabold',
+  pillCls: 'bg-green-500/15 text-green-500 ring-green-500/40 font-extrabold',
+  textCls: 'text-green-500 font-extrabold',
+  tipCls: 'bg-green-500/10 border-green-500/30',
+  markerColor: '#38a169',
+}
+const _COLD_MID: StageStyle = {
+  tempCls: 'text-green-400',
+  pillCls: 'bg-green-400/10 text-green-400 ring-green-400/20',
+  textCls: 'text-green-400',
+  tipCls: 'bg-green-400/8 border-green-400/20',
+  markerColor: '#68d391',
+}
+const _NEUTRAL: StageStyle = {
+  tempCls: 'text-amber-400',
+  pillCls: 'bg-amber-400/10 text-amber-400 ring-amber-400/20',
+  textCls: 'text-amber-400',
+  tipCls: 'bg-amber-400/10 border-amber-400/25',
+  markerColor: '#ecc94b',
+}
+const _HOT_MID: StageStyle = {
+  tempCls: 'text-orange-400',
+  pillCls: 'bg-orange-400/10 text-orange-400 ring-orange-400/20',
+  textCls: 'text-orange-400',
+  tipCls: 'bg-orange-400/10 border-orange-400/25',
+  markerColor: '#ed8936',
+}
+const _HOT_EXTREME: StageStyle = {
+  tempCls: 'text-[#e53e3e] font-extrabold',
+  pillCls: 'bg-red-500/15 text-red-500 ring-red-500/40 font-extrabold',
+  textCls: 'text-red-500 font-extrabold',
+  tipCls: 'bg-red-500/10 border-red-500/30',
+  markerColor: '#e53e3e',
+}
+
+const SHORT_STAGE_STYLES: Record<string, StageStyle> = {
+  冰点: _COLD_EXTREME,
+  低迷: _COLD_MID,
+  中性: _NEUTRAL,
+  活跃: _HOT_MID,
+  过热: _HOT_EXTREME,
+}
+
+const TREND_STAGE_STYLES: Record<string, StageStyle> = {
+  空头: _COLD_EXTREME,
+  弱势: _COLD_MID,
+  中性: _NEUTRAL,
+  强势: _HOT_MID,
+  过热: _HOT_EXTREME,
+}
 
 // ─── 小工具组件 ──────────────────────────────────────────────────
 
-function TempGauge({ value, stage, stageLabel }: { value: number; stage: 'short' | 'trend'; stageLabel: string }) {
-  const color = value >= 70 ? 'text-red-400' : value >= 45 ? 'text-amber-400' : 'text-blue-400'
-  const bg    = value >= 70 ? 'bg-red-400' : value >= 45 ? 'bg-amber-400' : 'bg-blue-400'
+function DeltaVal({ v, suffix = '°' }: { v: number | null; suffix?: string }) {
+  if (v === null) return <span className="text-secondary-text">—</span>
+  const cls = v > 0 ? 'text-red-400' : v < 0 ? 'text-green-400' : 'text-secondary-text'
+  const rounded = Math.round(v * 100) / 100
   return (
-    <div className="flex items-center gap-3">
-      <div className={cn('text-3xl font-bold tabular-nums leading-none', color)}>{value}°</div>
-      <div>
-        <div className={cn('text-xs font-semibold', color)}>{stageLabel}</div>
-        <div className="text-[10.5px] text-secondary-text">{stage === 'short' ? '短线情绪' : '趋势情绪'}</div>
-      </div>
-      <div className="flex-1 h-2 bg-muted/50 rounded-full overflow-hidden ml-2">
-        <div className={cn('h-full rounded-full transition-all', bg)} style={{ width: `${value}%` }} />
-      </div>
-    </div>
+    <span className={cn('tabular-nums', cls)}>
+      {rounded > 0 ? '+' : ''}{rounded}{suffix}
+    </span>
   )
 }
 
-function MiniLine({ data, color }: { data: number[]; color: string }) {
-  const max = Math.max(...data); const min = Math.min(...data)
-  const h = 32; const w = 100
-  const pts = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * w
-    const y = h - ((v - min) / (max - min || 1)) * h
-    return `${x},${y}`
-  }).join(' ')
+function EmptyHint({ text }: { text: string }) {
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-8" preserveAspectRatio="none">
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={pts.split(' ').at(-1)!.split(',')[0]} cy={pts.split(' ').at(-1)!.split(',')[1]} r="3" fill={color} />
-    </svg>
-  )
-}
-
-function VolBar({ val, avg }: { val: number; avg: number }) {
-  const ratio = val / avg
-  const color = ratio > 1.15 ? '#fc8181' : ratio < 0.85 ? '#68d391' : '#a0aec0'
-  const label = ratio > 1.15 ? '放量' : ratio < 0.85 ? '缩量' : '平量'
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 bg-muted/50 rounded-full overflow-hidden">
-        <div className="h-full rounded-full" style={{ width: `${Math.min(ratio * 60, 100)}%`, background: color }} />
-      </div>
-      <span className="text-[10.5px] font-semibold" style={{ color }}>{label}</span>
-    </div>
-  )
-}
-
-function StageDot({ label, day, color }: { label: string; day: string; color: string }) {
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <div className={cn('w-2 h-2 rounded-full', color.replace('text-', 'bg-'))} />
-      <div className={cn('text-[9.5px] font-bold', color)}>{label}</div>
-      <div className="text-[9px] text-secondary-text">{day}</div>
+    <div className="rounded-lg border border-dashed border-border/50 bg-muted/20 px-4 py-6 text-center text-[11px] text-secondary-text">
+      {text}
     </div>
   )
 }
 
 // ─── 外盘情绪卡 ──────────────────────────────────────────────────
 
-function OverseasCard() {
+function ChgChip({ label, v }: { label: string; v: number | null | undefined }) {
+  if (v === null || v === undefined) return null
+  return (
+    <span className={cn(
+      'text-[11.5px] px-2 py-0.5 rounded tabular-nums font-medium',
+      v >= 0 ? 'bg-red-400/10 text-red-400' : 'bg-green-400/10 text-green-400',
+    )}>
+      {label} {v > 0 ? '+' : ''}{v.toFixed(2)}%
+    </span>
+  )
+}
+
+function OverseasCard({ overseas }: { overseas: SentimentOverseas | null }) {
+  const hasUs = !!overseas && (
+    overseas.spx_chg !== null || overseas.ndx_chg !== null || overseas.dji_chg !== null
+  )
+  const hasKr = !!overseas && (overseas.kospi_chg !== null || overseas.kosdaq_chg !== null)
   return (
     <div className="rounded-xl border border-border/50 bg-card p-4">
       <div className="text-xs font-semibold text-secondary-text uppercase tracking-wide mb-3">外盘情绪（先行锚）</div>
-      <div className="grid grid-cols-2 gap-4">
-        {/* 美股 */}
+      {overseas && (hasUs || hasKr) ? (
         <div className="space-y-2">
-          <div className="flex items-center gap-1.5">
-            <span className="text-base">🇺🇸</span>
-            <span className="text-xs font-semibold text-foreground">美股（昨夜）</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10.5px] text-secondary-text w-16 shrink-0">美股昨夜</span>
+            <ChgChip label="标普500" v={overseas.spx_chg} />
+            <ChgChip label="纳斯达克" v={overseas.ndx_chg} />
+            <ChgChip label="道琼斯" v={overseas.dji_chg} />
+            {overseas.vix !== null && overseas.vix !== undefined && (
+              <span className="text-[11.5px] px-2 py-0.5 rounded tabular-nums bg-muted/60 text-secondary-text">
+                VIX {overseas.vix}
+              </span>
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-1 text-[11px]">
-            {[['纳指','▲+0.8%','text-green-500'],['标普','▲+0.5%','text-green-500'],['SOX','▲+1.4%','text-green-500'],['金龙','▲+0.6%','text-green-500'],['VIX','15.2','text-secondary-text']].map(([k,v,c]) => (
-              <div key={k} className="flex justify-between">
-                <span className="text-secondary-text">{k}</span>
-                <span className={c as string}>{v}</span>
-              </div>
-            ))}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10.5px] text-secondary-text w-16 shrink-0">韩股盘中</span>
+            <ChgChip label="KOSPI" v={overseas.kospi_chg} />
+            <ChgChip label="KOSDAQ" v={overseas.kosdaq_chg} />
           </div>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-sm font-bold text-green-400">58°</span>
-            <span className="text-[10.5px] text-secondary-text">较昨日 <span className="text-green-400">+3°</span></span>
-          </div>
-          <MiniLine data={[55,52,54,55,58]} color="#68d391" />
-          <div className="text-[9.5px] text-secondary-text">近5日: 55→52→54→55→58</div>
         </div>
-        {/* 韩股 */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-1.5">
-            <span className="text-base">🇰🇷</span>
-            <span className="text-xs font-semibold text-foreground">韩股（盘中）</span>
-          </div>
-          <div className="grid grid-cols-2 gap-1 text-[11px]">
-            {[['KOSPI','▼-0.3%','text-red-400'],['KOSDAQ','▼-0.6%','text-red-400'],['三星','▼-1.2%','text-red-400'],['海力士','▼-0.9%','text-red-400']].map(([k,v,c]) => (
-              <div key={k} className="flex justify-between">
-                <span className="text-secondary-text">{k}</span>
-                <span className={c as string}>{v}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-sm font-bold text-red-400">41°</span>
-            <span className="text-[10.5px] text-secondary-text">较昨日 <span className="text-red-400">-5°</span></span>
-          </div>
-          <MiniLine data={[50,48,45,46,41]} color="#fc8181" />
-          <div className="text-[9.5px] text-secondary-text">近5日: 50→48→45→46→41</div>
-        </div>
-      </div>
-      <div className="mt-3 rounded-lg bg-amber-400/8 border border-amber-400/25 px-3 py-2 flex gap-2">
-        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-        <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
-          外盘背离：美股(隔夜)偏多 × 韩股(今晨)走弱 → 半导体链条亚太段转弱，与 A股半导体设备退潮共振；外部锚分歧，题材靠内因。
-        </p>
-      </div>
+      ) : (
+        <EmptyHint text="外盘摘要待收盘采集后更新" />
+      )}
     </div>
   )
 }
 
 // ─── 情绪演化主轴 ─────────────────────────────────────────────────
 
-function MainAxis({ selectedDay, onSelectDay }: { selectedDay: number; onSelectDay: (i: number) => void }) {
-  const todayShort = SHORT_TEMPS[SHORT_TEMPS.length - 1]
-  const todayTrend = TREND_TEMPS[TREND_TEMPS.length - 1]
-  const todayVol   = VOLUMES[VOLUMES.length - 1]
-  const avgVol     = VOLUMES.slice(0, -1).reduce((a, b) => a + b, 0) / (VOLUMES.length - 1)
+const AXIS_W = 720
+const AXIS_H = 150
+const AXIS_Y_TOP = 30     // 分值 100
+const AXIS_Y_BOTTOM = 110 // 分值 0
+
+function DualLineChart({ shortTemps, trendTemps }: {
+  shortTemps: (number | null)[]
+  trendTemps: (number | null)[]
+}) {
+  const n = shortTemps.length
+  const xOf = (i: number) => (n <= 1 ? AXIS_W - 20 : 20 + (i * (AXIS_W - 40)) / (n - 1))
+  const yOf = (v: number) => AXIS_Y_BOTTOM - (v / 100) * (AXIS_Y_BOTTOM - AXIS_Y_TOP)
+
+  const series = (arr: (number | null)[], color: string) => {
+    const pts = arr
+      .map((v, i) => ({ x: xOf(i), y: v === null ? null : yOf(v) }))
+      .filter((p): p is { x: number; y: number } => p.y !== null)
+    if (pts.length === 0) return null
+    const peak = pts.reduce((a, b) => (b.y < a.y ? b : a)) // y 最小 = 分值最高
+    return (
+      <g>
+        {pts.length >= 2 && (
+          <polyline
+            points={pts.map((p) => `${p.x},${p.y}`).join(' ')}
+            fill="none" stroke={color} strokeWidth="2.5"
+            strokeLinecap="round" strokeLinejoin="round"
+          />
+        )}
+        {/* 区间高点 */}
+        {pts.length >= 3 && <circle cx={peak.x} cy={peak.y} r="3" fill={color} />}
+        {/* 最新点 */}
+        <circle cx={pts[pts.length - 1].x} cy={pts[pts.length - 1].y} r="4.5" fill={color} stroke="#fff" strokeWidth="1.5" />
+      </g>
+    )
+  }
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="text-xs font-semibold text-secondary-text uppercase tracking-wide">情绪演化主轴（近 {DAYS.length} 交易日）</div>
-        <div className="flex gap-1">
-          {['5日','10日','20日'].map((d, i) => (
-            <button key={d} className={cn('text-[10.5px] px-2 py-0.5 rounded-md transition-colors', i === 1 ? 'bg-[hsl(var(--primary))/15] text-[hsl(var(--primary))] font-semibold' : 'text-secondary-text hover:text-foreground')}>
-              {d}
-            </button>
-          ))}
-        </div>
-      </div>
+    <svg
+      viewBox={`0 0 ${AXIS_W} ${AXIS_H}`} preserveAspectRatio="none"
+      className="w-full block" style={{ height: AXIS_H }}
+    >
+      {/* 横向网格线：0 / 50 / 100 */}
+      {[AXIS_Y_TOP, 70, AXIS_Y_BOTTOM].map((y) => (
+        <line key={y} x1="0" y1={y} x2={AXIS_W} y2={y} stroke="hsl(var(--border))" strokeWidth="1" />
+      ))}
+      {/* 今日竖虚线 */}
+      <line
+        x1={xOf(n - 1)} y1="12" x2={xOf(n - 1)} y2="138"
+        stroke={TREND_COLOR} strokeDasharray="4 4" strokeWidth="1"
+      />
+      {series(trendTemps, TREND_COLOR)}
+      {series(shortTemps, SHORT_COLOR)}
+    </svg>
+  )
+}
 
-      {/* 今日概况 */}
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <TempGauge value={todayShort} stage="short" stageLabel="退潮" />
-          <div className="text-[10px] text-secondary-text mt-1">较昨日 <span className="text-red-400">-0°</span> · 较5日均值 <span className="text-red-400">-18°</span></div>
-        </div>
-        <div>
-          <TempGauge value={todayTrend} stage="trend" stageLabel="偏多" />
-          <div className="text-[10px] text-secondary-text mt-1">较昨日 <span className="text-secondary-text">0°</span> · 较5日均值 <span className="text-green-400">+1°</span></div>
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="text-2xl font-bold text-foreground tabular-nums">{todayVol}万亿</div>
-          </div>
-          <div className="text-[10px] text-secondary-text mt-0.5">成交额 · 较昨日 <span className="text-secondary-text">±0%</span></div>
-          <VolBar val={todayVol} avg={avgVol} />
-        </div>
+function VolStrip({ vols }: { vols: (number | null)[] }) {
+  const valid = vols.filter((v): v is number => v !== null)
+  if (valid.length === 0) return null
+  const max = Math.max(...valid)
+  return (
+    <div className="mt-4 pt-3 border-t border-border/40">
+      <div className="text-[11px] text-secondary-text mb-3">
+        量能轨迹（单位万亿）· <span className="text-red-400">红=放量</span> <span className="text-green-400">绿=缩量</span>
       </div>
-
-      {/* 轨迹图 */}
-      <div className="space-y-3">
-        {/* 短线温度轨迹 */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10.5px] text-secondary-text">短线情绪</span>
-            <div className="flex gap-3 text-[9.5px] text-secondary-text">
-              {DAYS.map((d, i) => (
-                <button key={d} onClick={() => onSelectDay(i)}
-                  className={cn('tabular-nums transition-colors', i === selectedDay ? 'text-amber-400 font-bold' : 'hover:text-foreground')}>
-                  {Short_TEMPS_val(i)}
-                </button>
-              ))}
+      <div className="flex items-end gap-2 h-16 mt-4">
+        {vols.map((v, i) => {
+          if (v === null) return <div key={i} className="flex-1" />
+          const isToday = i === vols.length - 1
+          const prev = i > 0 ? vols[i - 1] : null
+          const kind = isToday
+            ? 'today'
+            : prev !== null && prev !== undefined ? (v > prev ? 'up' : v < prev ? 'down' : 'flat') : 'flat'
+          const bg = kind === 'up' ? '#fc8181' : kind === 'down' ? '#68d391' : kind === 'today' ? TREND_COLOR : '#cbd5e0'
+          return (
+            <div
+              key={i}
+              className="flex-1 relative rounded-t-[3px]"
+              style={{ height: `${Math.max((v / max) * 100, 10)}%`, background: bg, minWidth: 0 }}
+            >
+              <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9.5px] text-secondary-text whitespace-nowrap tabular-nums">
+                {(v / 10000).toFixed(2)}
+              </span>
             </div>
-          </div>
-          <MiniLine data={SHORT_TEMPS} color="#f6ad55" />
-        </div>
-        {/* 趋势温度轨迹 */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10.5px] text-secondary-text">趋势情绪</span>
-            <div className="flex gap-3 text-[9.5px] text-secondary-text">
-              {TREND_TEMPS.map((v, i) => (
-                <span key={i} className={cn('tabular-nums', i === selectedDay && 'text-[hsl(var(--primary))] font-bold')}>{v}</span>
-              ))}
-            </div>
-          </div>
-          <MiniLine data={TREND_TEMPS} color="hsl(var(--primary))" />
-        </div>
-        {/* 日期轴 */}
-        <div className="flex justify-between relative">
-          {DAYS.map((d, i) => (
-            <button key={d} onClick={() => onSelectDay(i)}
-              className={cn('text-[9px] text-secondary-text hover:text-foreground transition-colors', i === DAYS.length - 1 && 'font-bold text-foreground')}>
-              {d.slice(3)}
-            </button>
-          ))}
-        </div>
-        {/* 阶段标注 */}
-        <div className="flex justify-between items-end pt-1 border-t border-border/30">
-          {Object.entries(STAGE_LABELS).map(([, s]) => <StageDot key={s.day} {...s} />)}
-        </div>
-      </div>
-
-      {/* AI 动态过程 */}
-      <div className="rounded-lg bg-muted/40 border border-border/40 px-3 py-2.5">
-        <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide mb-1.5">🧭 动态过程</div>
-        <p className="text-xs text-foreground/90 leading-relaxed">
-          短线情绪从 09-19 高潮(78°)连续两日回落至 32°，高位板断板、炸板率升至 41%，周期进入<strong>退潮</strong>；
-          趋势情绪仍稳在 61° 偏多，两者背离——指数容错尚可，题材接力转弱。
-          <span className="text-amber-400 ml-1">· 今日退潮第 2 天</span>
-        </p>
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function Short_TEMPS_val(i: number) { return SHORT_TEMPS[i] }
+function MainAxis({ overview, trend }: { overview: SentimentOverview | null; trend: SentimentTrendPoint[] }) {
+  const days = trend.map((p) => p.trade_date.slice(5))
+  const shortTemps = trend.map((p) => p.sentiment_st)
+  const trendTemps = trend.map((p) => p.sentiment_trend)
+  const vols = trend.map((p) => p.total_amount)
+  const n = days.length
+
+  const st = overview?.temperature.st ?? (n > 0 ? shortTemps[n - 1] : null)
+  const tr = overview?.temperature.trend ?? (n > 0 ? trendTemps[n - 1] : null)
+  const todayVol = overview?.amount.total ?? (n > 0 ? vols[n - 1] : null)
+  const vsPrev: number | null = overview?.amount.vs_prev_pct ?? null
+
+  // 较昨日 / 较5日均值
+  const delta = (series: (number | null)[], against: 'prev' | 'avg5'): number | null => {
+    if (st === null || n === 0) return null
+    const cur = series[n - 1]
+    if (cur === null) return null
+    if (against === 'prev') {
+      const prev = n >= 2 ? series[n - 2] : null
+      return prev === null ? null : cur - prev
+    }
+    const base = series.slice(Math.max(0, n - 6), n - 1).filter((v): v is number => v !== null)
+    if (base.length === 0) return null
+    return cur - base.reduce((a, b) => a + b, 0) / base.length
+  }
+  const stVsPrev = n >= 2 ? delta(shortTemps, 'prev') : null
+  const stVsAvg5 = delta(shortTemps, 'avg5')
+  const trVsPrev = n >= 2 ? delta(trendTemps, 'prev') : null
+  const trVsAvg5 = delta(trendTemps, 'avg5')
+
+  const volTag = vsPrev === null ? null : vsPrev >= 5 ? '放量' : vsPrev <= -5 ? '缩量' : '平量'
+
+  // 动态过程：规则版文案
+  let processText: string | null = null
+  if (st !== null || tr !== null) {
+    const parts: string[] = []
+    if (st !== null) parts.push(`短线情绪 ${st}°（${shortStage5(st)}）`)
+    if (tr !== null) parts.push(`趋势情绪 ${tr}°（${trendStage5(tr)}）`)
+    if (st !== null && tr !== null && Math.abs(st - tr) >= 15) {
+      parts.push(st < tr ? '两维度背离：题材弱、指数稳，注意节奏' : '短线强于趋势：题材活跃，留意持续性')
+    }
+    processText = parts.join('；')
+  }
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-card p-4">
+      <div className="text-xs font-semibold text-secondary-text uppercase tracking-wide mb-3">
+        情绪演化主轴（近 {n || '—'} 交易日）
+      </div>
+
+      {/* evo-stats：今日三要素 */}
+      <div className="flex gap-7 flex-wrap mb-3">
+        <div>
+          <div className="text-[11px] text-secondary-text mb-0.5">短线温度</div>
+          <div className="text-lg font-bold flex items-baseline gap-2 flex-wrap">
+            <span style={{ color: SHORT_COLOR }}>{st === null ? '—' : `${st}°`}</span>
+            <span className="text-[11px] font-medium text-secondary-text">较昨日 <DeltaVal v={stVsPrev} /></span>
+            <span className="text-[11px] font-medium text-secondary-text">较5日均值 <DeltaVal v={stVsAvg5} /></span>
+          </div>
+        </div>
+        <div>
+          <div className="text-[11px] text-secondary-text mb-0.5">趋势温度</div>
+          <div className="text-lg font-bold flex items-baseline gap-2 flex-wrap">
+            <span style={{ color: TREND_COLOR }}>{tr === null ? '—' : `${tr}°`}</span>
+            <span className="text-[11px] font-medium text-secondary-text">较昨日 <DeltaVal v={trVsPrev} /></span>
+            <span className="text-[11px] font-medium text-secondary-text">较5日均值 <DeltaVal v={trVsAvg5} /></span>
+          </div>
+        </div>
+        <div>
+          <div className="text-[11px] text-secondary-text mb-0.5">量能（两市成交额）</div>
+          <div className="text-lg font-bold flex items-baseline gap-2 flex-wrap">
+            <span className="tabular-nums">{fmtVol(todayVol)}</span>
+            <span className="text-[11px] font-medium text-secondary-text">较昨日 <DeltaVal v={vsPrev} suffix="%" /></span>
+            {volTag && (
+              <span className={cn(
+                'text-[10.5px] font-semibold px-1.5 py-px rounded',
+                volTag === '放量' ? 'bg-red-400/10 text-red-400' : volTag === '缩量' ? 'bg-green-400/10 text-green-400' : 'bg-muted/60 text-secondary-text',
+              )}>
+                {volTag}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 图例 + 日期区间 */}
+      <div className="flex items-center gap-3.5 text-[11px] text-secondary-text mb-1">
+        <span className="inline-flex items-center gap-1.5">
+          <i className="inline-block w-2.5 h-[3px] rounded-sm" style={{ background: SHORT_COLOR }} />短线情绪
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <i className="inline-block w-2.5 h-[3px] rounded-sm" style={{ background: TREND_COLOR }} />趋势情绪
+        </span>
+        {n > 0 && (
+          <span className="ml-auto text-[10.5px]">{days[0]} → {days[n - 1]} · 今日高亮</span>
+        )}
+      </div>
+
+      <DualLineChart shortTemps={shortTemps} trendTemps={trendTemps} />
+
+      {/* 日期轴 */}
+      {n > 0 && (
+        <div className="flex justify-between mt-1">
+          {days.map((d, i) => (
+            <span
+              key={i}
+              className={cn(
+                'text-[9px] tabular-nums',
+                i === n - 1 ? 'font-bold text-foreground' : 'text-secondary-text',
+              )}
+            >
+              {d}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <VolStrip vols={vols} />
+
+      {/* 阶段轨迹 */}
+      {n > 0 && (
+        <div className="flex gap-1.5 flex-wrap mt-3 text-[11px]">
+          {days.slice(-5).map((d, idx) => {
+            const i = n - Math.min(n, 5) + idx
+            const isCur = i === n - 1
+            return (
+              <span
+                key={i}
+                className={cn(
+                  'px-2 py-0.5 rounded border',
+                  isCur
+                    ? 'bg-[hsl(var(--primary))/10] border-[hsl(var(--primary))/30] text-[hsl(var(--primary))] font-semibold'
+                    : 'bg-muted/30 border-border/50 text-secondary-text',
+                )}
+              >
+                {d} {shortStage5(shortTemps[i])}
+              </span>
+            )
+          })}
+        </div>
+      )}
+
+      {/* 动态过程 */}
+      <div className="rounded-lg bg-muted/40 border border-border/40 px-3 py-2.5 mt-3">
+        <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide mb-1.5">🧭 动态过程</div>
+        {processText ? (
+          <p className="text-xs text-foreground/90 leading-relaxed">{processText}</p>
+        ) : (
+          <p className="text-xs text-secondary-text">快照数据采集中，收盘后自动生成</p>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ─── 双维度情绪演化 ───────────────────────────────────────────────
 
-function DualDimension() {
-  const SHORT_INDICATORS = [
-    { label: '空间高度', data: '6→4→3→3→3', trend: '下降' as const },
-    { label: '晋级率',   data: '55→48→41→45→41', trend: '下降' as const },
-    { label: '炸板率',   data: '18→25→30→38→41', trend: '上升' as const },
-    { label: '昨涨停表现', data: '+2.1→+0.8→-0.4→-0.8→-0.6', trend: '转负' as const },
-    { label: '大面数',   data: '1→3→6→8→9', trend: '上升' as const },
+interface MetricRow {
+  label: string
+  value: string
+  valueCls?: string
+  traj?: string | null
+}
+
+// 阶段结论提示（对齐 mockup senti-tip 文案风格）
+const SHORT_ADVICE: Record<string, string> = {
+  冰点: '忌追高接力，低位新题材首发属冰点试错，轻仓观察',
+  低迷: '控制仓位，等情绪企稳信号再参与',
+  中性: '正常节奏参与，聚焦主线题材，快进快出',
+  活跃: '可适度打板接力，紧盯空间板高度与炸板率',
+  过热: '警惕高潮后退潮，以兑现为主，勿追高',
+}
+
+const TREND_ADVICE: Record<string, string> = {
+  空头: '空仓或轻仓观望，等右侧企稳信号',
+  弱势: '小仓位试错，严格止损',
+  中性: '可持仓优质趋势股，等放量突破再加仓',
+  强势: '以持仓为主，回踩均线不破可加仓',
+  过热: '逐步兑现利润，防冲高回落',
+}
+
+function SentimentCard({ icon, name, temp, stageLabel, style, fallbackColor, advice, gaugeLabels, metrics }: {
+  icon: string
+  name: string
+  temp: number | null
+  stageLabel: string
+  style: StageStyle | null
+  fallbackColor: string
+  advice: string
+  gaugeLabels: string[]
+  metrics: MetricRow[]
+}) {
+  return (
+    <div className="rounded-xl border border-border/50 bg-card p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-base">{icon}</span>
+        <span className="text-[13.5px] font-bold text-foreground">{name}</span>
+        <span className={cn('text-[26px] ml-auto leading-none tabular-nums',
+          temp === null ? 'font-extrabold text-foreground' : style?.tempCls)}>
+          {temp === null ? '—' : `${temp}°`}
+        </span>
+        {/* 阶段结论（着重突出，随档位色阶） */}
+        <span className={cn('text-[13px] px-3.5 py-1 rounded-full ring-1',
+          style ? style.pillCls : 'bg-slate-400/15 text-slate-400 ring-slate-400/30')}>{stageLabel}</span>
+      </div>
+      {/* 仪表：渐变轨道 + 白芯指针 + 5 档标签（指针随档位色阶） */}
+      <div className="relative h-2 rounded-full" style={{ background: 'linear-gradient(90deg,#4299e1,#48bb78,#ecc94b,#ed8936,#e53e3e)' }}>
+        <div
+          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-background shadow-md"
+          style={{ left: `${Math.min(100, Math.max(0, temp ?? 0))}%`, border: `3px solid ${style?.markerColor ?? fallbackColor}` }}
+        />
+      </div>
+      <div className="flex justify-between mt-1.5 text-[10.5px] text-secondary-text">
+        {gaugeLabels.map((l) => <span key={l}>{l}</span>)}
+      </div>
+      {/* 指标明细（含演变轨迹） */}
+      <div className="border-t border-border/40 mt-3 pt-2">
+        {metrics.map((m) => (
+          <div key={m.label} className="flex justify-between items-center text-xs py-[3.5px]">
+            <span className="text-secondary-text">{m.label}</span>
+            <span className="font-semibold text-foreground tabular-nums">
+              <span className={m.valueCls}>{m.value}</span>
+              {m.traj && <span className="ml-1.5 text-[10.5px] text-secondary-text font-normal tabular-nums">{m.traj}</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+      {/* 结论提示（五档全带档位色底，阶段名同步档位颜色加粗） */}
+      {temp !== null && (
+        <div className={cn('mt-3 rounded-lg border px-2.5 py-2 text-[11.5px] text-secondary-text leading-relaxed',
+          style?.tipCls ?? 'bg-muted/40 border-border/50')}>
+          💡 <b className={style?.textCls}>{stageLabel}</b>：{advice}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DualDimension({ overview, trend, ladderTrend }: {
+  overview: SentimentOverview | null
+  trend: SentimentTrendPoint[]
+  ladderTrend: LadderPoint[]
+}) {
+  const st = overview?.temperature.st ?? null
+  const tr = overview?.temperature.trend ?? null
+  const stStage = shortStage5(st)
+  const trStage = trendStage5(tr)
+
+  // 轨迹均为 时间正序（旧 → 新），trend/ladderTrend 接口已按旧→新返回
+  const traj = (arr: (number | null)[], fmt: (v: number) => string = String): string | null => {
+    const vals = arr.filter((v): v is number => v !== null)
+    return vals.length >= 2 ? vals.map(fmt).join('→') : null
+  }
+  const heights = ladderTrend.map((p) => p.max_height)
+  const firstBoards = ladderTrend.map((p) => p.height_1)
+  const limitUps = trend.map((p) => p.limit_up_count)
+  const amounts = trend.map((p) => p.total_amount)
+  const ad = overview?.advance_decline
+
+  const stStyle = st !== null ? SHORT_STAGE_STYLES[stStage] ?? null : null
+  const trStyle = tr !== null ? TREND_STAGE_STYLES[trStage] ?? null : null
+
+  const SHORT_METRICS: MetricRow[] = [
+    {
+      label: '空间高度',
+      value: `${heights[heights.length - 1] ?? '—'}板`,
+      traj: traj(heights),
+    },
+    {
+      label: '涨停家数',
+      value: ad?.limit_up !== null && ad?.limit_up !== undefined ? String(ad.limit_up) : '—',
+      traj: traj(limitUps),
+    },
+    {
+      label: '首板家数',
+      value: firstBoards[firstBoards.length - 1] !== null && firstBoards[firstBoards.length - 1] !== undefined
+        ? String(firstBoards[firstBoards.length - 1]) : '—',
+      traj: traj(firstBoards),
+    },
+    {
+      label: '炸板率',
+      value: ad?.blown_rate !== null && ad?.blown_rate !== undefined ? `${ad.blown_rate}%` : '—',
+      valueCls: (ad?.blown_rate ?? 0) >= 20 ? 'text-red-400' : (ad?.blown_rate ?? 1) < 10 ? 'text-green-400' : '',
+    },
+    {
+      label: '跌停家数',
+      value: ad?.limit_down !== null && ad?.limit_down !== undefined ? String(ad.limit_down) : '—',
+      valueCls: 'text-green-400',
+    },
   ]
-  const TREND_INDICATORS = [
-    { label: '上证站 MA20', data: '连5日站稳', trend: 'ok' as const },
-    { label: '涨跌家数',   data: '3200→2810→2210', trend: '收窄' as const },
-    { label: '成交额',     data: '1.4→1.3→1.2→1.18万亿', trend: '缩量' as const },
-    { label: '两融余额',   data: '+8→+12→+15→+18亿', trend: '流入' as const },
-    { label: '新高/新低',  data: '160→140→120/86', trend: '收窄' as const },
+
+  const TREND_METRICS: MetricRow[] = [
+    {
+      // 占位：快照暂无上证指数字段，后续采集补 sh_chg_pct 后自动生效
+      label: '上证指数',
+      value: '—',
+    },
+    {
+      label: '涨跌家数',
+      value: ad?.up != null && ad?.down != null ? `${ad.up}/${ad.down}` : '—',
+    },
+    {
+      label: '新高/新低',
+      value: overview ? `${overview.new_high_60d ?? '—'}/${overview.new_low_60d ?? '—'}` : '—',
+    },
+    {
+      label: '成交额',
+      value: fmtVol(amounts[amounts.length - 1] ?? overview?.amount.total ?? null),
+      traj: traj(amounts, (v) => (v / 10000).toFixed(2)),
+    },
+    {
+      // 占位：两融余额暂无数据源，接入后自动生效
+      label: '两融余额',
+      value: '—',
+    },
   ]
 
   return (
     <div className="rounded-xl border border-border/50 bg-card p-4">
-      <div className="text-xs font-semibold text-secondary-text uppercase tracking-wide mb-3">双维度情绪演化</div>
-      <div className="grid grid-cols-2 gap-4">
-        {/* 短线 */}
-        <div className="rounded-lg border border-amber-400/25 bg-amber-400/5 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <span className="text-base">⚡</span>
-              <span className="text-xs font-bold text-amber-500">短线情绪  32°</span>
-            </div>
-            <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-md bg-red-400/15 text-red-400">退潮</span>
-          </div>
-          <div className="h-1.5 bg-muted/50 rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-amber-400" style={{ width: '32%' }} />
-          </div>
-          <div className="space-y-1.5">
-            {SHORT_INDICATORS.map((ind) => (
-              <div key={ind.label} className="flex items-center justify-between text-[10.5px]">
-                <span className="text-secondary-text w-24 shrink-0">{ind.label}</span>
-                <span className="text-foreground/80 font-mono text-[9.5px]">{ind.data}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-1 rounded bg-red-400/10 px-2 py-1.5 text-[10.5px] text-red-400 font-medium">
-            💡 退潮期：忌打板接力，控制仓位
-          </div>
-        </div>
-        {/* 趋势 */}
-        <div className="rounded-lg border border-[hsl(var(--primary))/25] bg-[hsl(var(--primary))/5] p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <span className="text-base">📈</span>
-              <span className="text-xs font-bold text-[hsl(var(--primary))]">趋势情绪  61°</span>
-            </div>
-            <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-md bg-green-400/15 text-green-400">偏多</span>
-          </div>
-          <div className="h-1.5 bg-muted/50 rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-[hsl(var(--primary))]" style={{ width: '61%' }} />
-          </div>
-          <div className="space-y-1.5">
-            {TREND_INDICATORS.map((ind) => (
-              <div key={ind.label} className="flex items-center justify-between text-[10.5px]">
-                <span className="text-secondary-text w-24 shrink-0">{ind.label}</span>
-                <span className="text-foreground/80 font-mono text-[9.5px]">{ind.data}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-1 rounded bg-green-400/10 px-2 py-1.5 text-[10.5px] text-green-400 font-medium">
-            💡 偏多：趋势仓可持有
-          </div>
-        </div>
+      <div className="text-xs font-semibold text-secondary-text uppercase tracking-wide mb-3">双维度情绪演化（短线 × 趋势）</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <SentimentCard
+          icon="⚡"
+          name="短线情绪"
+          temp={st}
+          stageLabel={stStage}
+          style={stStyle}
+          fallbackColor={SHORT_COLOR}
+          advice={SHORT_ADVICE[stStage] ?? '数据采集中'}
+          gaugeLabels={['冰点', '低迷', '中性', '活跃', '过热']}
+          metrics={SHORT_METRICS}
+        />
+        <SentimentCard
+          icon="📈"
+          name="趋势情绪"
+          temp={tr}
+          stageLabel={trStage}
+          style={trStyle}
+          fallbackColor={TREND_COLOR}
+          advice={TREND_ADVICE[trStage] ?? '数据采集中'}
+          gaugeLabels={['空头', '弱势', '中性', '强势', '过热']}
+          metrics={TREND_METRICS}
+        />
       </div>
       {/* 背离提示 */}
-      <div className="mt-3 rounded-lg bg-amber-400/8 border border-amber-400/25 px-3 py-2 flex gap-2">
-        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-        <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
-          <strong>维度背离（已持续 2 日）</strong>：短线退潮 × 趋势偏多 → 指数环境不差，但题材情绪冰凉。
-          趋势仓可持有；勿开新短线仓；低位新题材首发属「冰点试错」而非追高。
-        </p>
-      </div>
+      {st !== null && tr !== null && Math.abs(st - tr) >= 15 && (
+        <div className="mt-3 rounded-lg bg-amber-400/8 border border-amber-400/25 px-3 py-2 flex gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
+            <strong>维度背离</strong>：短线 {stStage} × 趋势 {trStage} → 关注节奏，勿追高。
+          </p>
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── 涨停梯队演化 ─────────────────────────────────────────────────
+// ─── 涨停聚焦（涨停/跌停个股池） ──────────────────────────────────
 
-function LimitUpLadder() {
-  const [timeFilter, setTimeFilter] = useState<string>('全部')
+function LimitFocus({ ladderUp, ladderDown, ladderTrend, overview, onPoolFirstOpen }: {
+  ladderUp: LadderTodayResponse | null
+  ladderDown: LadderTodayResponse | null
+  ladderTrend: LadderPoint[]
+  overview: SentimentOverview | null
+  onPoolFirstOpen: (t: PoolType) => void
+}) {
+  const [poolTab, setPoolTab] = useState<PoolType>('limit_up')
   const [groupMode, setGroupMode] = useState<'height' | 'sector'>('height')
-  const TIME_FILTERS = ['全部','一字板 9:25','早盘 9:30-10:30','上午 10:30-11:30','午后 13:00-14:00','尾盘 14:00-15:00']
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
   const navigate = useNavigate()
+
+  const isDown = poolTab === 'limit_down'
+  const data = isDown ? ladderDown : ladderUp
+  const pool = data?.pool ?? []
+
+  // 连板数（涨停池） / 连续跌停天数（跌停池）
+  const boardOf = (s: LimitUpPoolItem) =>
+    (isDown ? (s.continuous_down_days ?? 1) : (s.consecutive_boards ?? 1))
+  const boardLabel = (b: number) => (isDown ? `${b}天` : `${b}板`)
+
+  const heights = ladderTrend.map((p) => p.max_height)
+  const firstBoards = ladderTrend.map((p) => p.height_1)
+  const maxBoards = Math.max(0, ...pool.map((s) => boardOf(s)))
+
+  // 按高度分组（从高到低）：同一连板数的在一起；按板块分组（按家数从多到少）：行业聚合
+  // 层级下钻：横排档位导航，同一时间只展开一档，默认选中第一档（最高板 / 家数最多板块）
+  const groups = useMemo(() => {
+    if (groupMode === 'height') {
+      const map = new Map<number, LimitUpPoolItem[]>()
+      for (const s of pool) {
+        const b = boardOf(s)
+        if (!map.has(b)) map.set(b, [])
+        map.get(b)!.push(s)
+      }
+      return [...map.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .map(([b, items]) => ({ key: boardLabel(b), label: isDown ? `连续${b}天` : `${b}板`, items }))
+    }
+    const map = new Map<string, LimitUpPoolItem[]>()
+    for (const s of pool) {
+      const sector = s.industry || '其他'
+      if (!map.has(sector)) map.set(sector, [])
+      map.get(sector)!.push(s)
+    }
+    return [...map.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([sector, items]) => ({ key: sector, label: sector, items }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, groupMode])
+
+  // 选中档位失效（切换池/分组模式）时自动回落到第一档
+  const activeKey = selectedGroup && groups.some((g) => g.key === selectedGroup)
+    ? selectedGroup
+    : groups[0]?.key ?? null
+  const activeGroup = groups.find((g) => g.key === activeKey) ?? null
+
+  const isLeader = (s: LimitUpPoolItem) => boardOf(s) >= maxBoards && maxBoards > 0
 
   return (
     <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
       {/* 近5日轨迹 */}
-      <div className="flex items-center gap-4 text-[11px] text-secondary-text border-b border-border/30 pb-3">
-        <span>近5日空间高度：<span className="text-foreground font-semibold">{HEIGHTS.join(' → ')}</span> 板(下降↓)</span>
-        <span>首板：<span className="text-foreground font-semibold">{LIMIT_UP.join(' / ')}</span> 只(萎缩↓)</span>
+      <div className="flex items-center gap-4 text-[11px] text-secondary-text border-b border-border/30 pb-3 flex-wrap">
+        <span>近{heights.length}日空间高度：<span className="text-foreground font-semibold">{heights.map((v) => v ?? '—').join(' → ') || '—'}</span> 板</span>
+        <span>首板：<span className="text-foreground font-semibold">{firstBoards.map((v) => v ?? '—').join(' / ') || '—'}</span> 只</span>
+        <span>今日涨停 <span className="text-red-400 font-bold">{overview?.advance_decline.limit_up ?? '—'}</span></span>
+        <span>跌停 <span className="text-green-400 font-bold">{overview?.advance_decline.limit_down ?? '—'}</span></span>
+        {!isDown && ladderUp?.snapshot?.max_height_name && (
+          <span>空间板 <span className="text-foreground font-bold">{ladderUp.snapshot.max_height_name} {ladderUp.snapshot.max_height}板</span></span>
+        )}
       </div>
 
-      {/* 筛选器 */}
+      {/* 池 tab + 分组切换 */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex gap-1">
-          {(['height','sector'] as const).map((m) => (
-            <button key={m} onClick={() => setGroupMode(m)}
+          {([['limit_up', '🔴 涨停个股'], ['limit_down', '🟢 跌停个股']] as const).map(([k, label]) => (
+            <button key={k} onClick={() => { setPoolTab(k); setSelectedGroup(null); onPoolFirstOpen(k) }}
+              className={cn('text-[11px] px-3 py-1.5 rounded-md border transition-colors font-medium',
+                poolTab === k
+                  ? k === 'limit_up'
+                    ? 'bg-red-400/10 border-red-400/30 text-red-400 font-semibold'
+                    : 'bg-green-400/10 border-green-400/30 text-green-400 font-semibold'
+                  : 'border-border/40 text-secondary-text hover:border-border')}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1 ml-auto">
+          {(['height', 'sector'] as const).map((m) => (
+            <button key={m} onClick={() => { setGroupMode(m); setSelectedGroup(null) }}
               className={cn('text-[10.5px] px-2.5 py-1 rounded-md border transition-colors',
                 groupMode === m ? 'bg-[hsl(var(--primary))/15] border-[hsl(var(--primary))/30] text-[hsl(var(--primary))] font-semibold' : 'border-border/40 text-secondary-text hover:border-border')}>
-              {m === 'height' ? '按高度分组' : '按板块分类'}
+              {m === 'height' ? (isDown ? '按连续跌停天数' : '按高度分组') : '按板块分类'}
             </button>
           ))}
         </div>
-        <div className="flex gap-1 flex-wrap">
-          {TIME_FILTERS.map((f) => (
-            <button key={f} onClick={() => setTimeFilter(f)}
-              className={cn('text-[10px] px-2 py-0.5 rounded-md border transition-colors',
-                timeFilter === f ? 'bg-muted border-border text-foreground font-semibold' : 'border-border/30 text-secondary-text hover:border-border')}>
-              {f}
-            </button>
-          ))}
-        </div>
+        {data?.pool_source && data.pool_source !== 'snapshot' && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 text-secondary-text">
+            {data.pool_source === 'realtime' ? '实时数据' : '最近交易日'}
+          </span>
+        )}
       </div>
 
-      {/* 今日统计 */}
-      <div className="flex items-center gap-4 text-[11px]">
-        <span className="text-secondary-text">今日涨停 <span className="text-green-400 font-bold">26</span></span>
-        <span className="text-secondary-text">炸板 <span className="text-red-400 font-bold">18</span></span>
-        <span className="text-secondary-text">跌停 <span className="text-red-400 font-bold">4</span></span>
-        <button className="ml-auto text-[10.5px] text-[hsl(var(--primary))] hover:underline">只看自选</button>
-      </div>
-
-      {/* 梯队列表 */}
-      <div className="space-y-1.5">
-        {LIMIT_UP_LIST.map((s) => (
-          <div key={s.code} className="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-border/40 hover:bg-muted/30 transition-colors group">
-            <div className="flex items-center gap-1.5 shrink-0">
-              {s.role === '龙头' && <span className="text-xs">👑</span>}
-              <span className={cn('text-[10.5px] font-bold px-1.5 py-0.5 rounded',
-                s.boards >= 3 ? 'bg-red-400/15 text-red-400' : s.boards === 2 ? 'bg-amber-400/15 text-amber-400' : 'bg-muted text-secondary-text')}>
-                {s.boards}板
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-semibold text-foreground">{s.code} {s.name}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted/60 text-secondary-text">{s.sector}</span>
-                {s.feature && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[hsl(var(--primary))/10] text-[hsl(var(--primary))]">{s.feature}</span>}
-                {s.note && <span className="text-[10px] text-secondary-text">{s.note}</span>}
-              </div>
-              <div className="flex items-center gap-3 mt-1 text-[10px] text-secondary-text">
-                <span>封单 {s.seal}</span>
-                <span>首封 {s.time}</span>
-                {s.catalyst && <span className="text-[hsl(var(--primary))/80]">{s.catalyst}</span>}
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/expectations/new')}
-              className="shrink-0 opacity-0 group-hover:opacity-100 flex items-center gap-1 text-[10px] text-[hsl(var(--primary))] border border-[hsl(var(--primary))/30] px-2 py-1 rounded-md hover:bg-[hsl(var(--primary))/8] transition-all"
-            >
-              <Plus className="w-2.5 h-2.5" />写入预期
-            </button>
+      {/* 层级下钻：档位导航横排（高度组从高到低 / 板块组按家数从多到少），默认选中第一档 */}
+      {groups.length === 0 ? (
+        <EmptyHint text={isDown ? '跌停池暂无数据（今日可能无跌停）' : '涨停池数据采集中（收盘后更新）'} />
+      ) : (
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap gap-1.5">
+            {groups.map((g) => (
+              <button key={g.key} onClick={() => setSelectedGroup(g.key)}
+                className={cn('text-[11.5px] px-3 py-1.5 rounded-full border transition-colors',
+                  g.key === activeKey
+                    ? isDown
+                      ? 'bg-green-500/15 border-green-500/40 text-green-500 font-bold'
+                      : 'bg-red-500/15 border-red-500/40 text-red-500 font-bold'
+                    : 'border-border/40 text-secondary-text hover:border-border hover:text-foreground')}>
+                {g.label} <span className="ml-0.5 tabular-nums">×{g.items.length}</span>
+              </button>
+            ))}
           </div>
-        ))}
-      </div>
-
-      {/* 炸板明细（折叠） */}
-      <details className="group">
-        <summary className="flex items-center gap-2 cursor-pointer text-[11px] text-secondary-text hover:text-foreground py-1 select-none list-none">
-          <ChevronRight className="w-3.5 h-3.5 group-open:rotate-90 transition-transform" />
-          炸板明细（{LIMIT_BLOWN.length} 只）
-        </summary>
-        <div className="mt-2 space-y-1.5 pl-5">
-          {LIMIT_BLOWN.map((s) => (
-            <div key={s.code} className="flex items-center gap-3 text-[11px]">
-              <span className="font-semibold text-foreground">{s.code} {s.name}</span>
-              <span className="text-secondary-text">{s.sector}</span>
-              <span className="text-amber-400">高点 {s.peak}</span>
-              <span className="text-secondary-text">收 {s.close}</span>
+          {/* 选中档位的富信息行卡片 */}
+          {activeGroup && (
+            <div className="space-y-1.5">
+              {activeGroup.items.map((s) => {
+                const board = boardOf(s)
+                return (
+                  <div key={s.code}
+                    className="group flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-border/40 bg-card hover:bg-muted/30 transition-colors flex-wrap">
+                    {!isDown && isLeader(s) && <span className="text-[12px] leading-none" title="空间板">👑</span>}
+                    <span className={cn('text-[10.5px] font-bold px-1.5 py-0.5 rounded shrink-0',
+                      isDown ? 'bg-green-400/15 text-green-400'
+                        : board >= 3 ? 'bg-red-400/15 text-red-400'
+                          : board === 2 ? 'bg-amber-400/15 text-amber-400'
+                            : 'bg-muted text-secondary-text')}>
+                      {boardLabel(board)}
+                    </span>
+                    <span className="text-[12.5px] font-bold text-foreground tabular-nums whitespace-nowrap">{s.code}</span>
+                    <span className="text-[12.5px] font-semibold text-foreground whitespace-nowrap">{s.name}</span>
+                    {s.industry && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-400/10 text-blue-400 whitespace-nowrap">{s.industry}</span>
+                    )}
+                    <span className={cn('text-[12px] font-bold tabular-nums whitespace-nowrap',
+                      (s.change_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400')}>
+                      {s.change_pct !== null ? `${s.change_pct > 0 ? '+' : ''}${s.change_pct.toFixed(2)}%` : '—'}
+                    </span>
+                    <div className="flex items-center gap-2.5 text-[10.5px] text-secondary-text whitespace-nowrap ml-auto">
+                      {s.seal_amount !== null && (
+                        <span>封单 <span className="text-foreground font-semibold tabular-nums">{(s.seal_amount / 1e8).toFixed(2)}亿</span></span>
+                      )}
+                      {s.first_limit_time && (
+                        <span>首封 <span className="text-foreground font-semibold tabular-nums">{fmtSealTime(s.first_limit_time)}</span></span>
+                      )}
+                      {s.break_count != null && (
+                        <span>
+                          {isDown ? '撬板' : '开板'}{' '}
+                          <span className={cn('font-semibold tabular-nums', s.break_count > 0 ? 'text-amber-400' : 'text-foreground')}>
+                            {s.break_count}次
+                          </span>
+                        </span>
+                      )}
+                      {s.limit_stat && <span className="tabular-nums">{s.limit_stat}</span>}
+                    </div>
+                    <button
+                      onClick={() => navigate('/expectations/new')}
+                      title="写入预期"
+                      className="shrink-0 opacity-0 group-hover:opacity-100 text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))/10] rounded p-1 transition-all"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )
+              })}
             </div>
-          ))}
+          )}
         </div>
-      </details>
+      )}
     </div>
   )
 }
 
 // ─── 市场聚焦演化 ─────────────────────────────────────────────────
 
-function fmtDay(d: string) {
-  // '09-15' → '9月15日'
-  const [m, day] = d.split('-')
-  return `${parseInt(m)}月${parseInt(day)}日`
-}
-
-function MarketFocus() {
+function MarketFocus({ tomorrow, focusWeek, focusMonth, onScopeFirstOpen }: {
+  tomorrow: TomorrowFocus | null
+  focusWeek: FocusResponse | null
+  focusMonth: FocusResponse | null
+  onScopeFirstOpen: (scope: FocusScope) => void
+}) {
   const [scope, setScope] = useState<'tomorrow' | 'week' | 'month'>('tomorrow')
-  const [focusTab, setFocusTab] = useState<'event' | 'stock' | 'sector'>('event')
-  const WEEK_DAYS = ['09-15','09-16','09-17','09-18','09-19','09-21']
-  const [weekDay, setWeekDay] = useState(WEEK_DAYS.length - 1)
+  const [focusTab, setFocusTab] = useState<'event' | 'stock' | 'sector'>('stock')
   const navigate = useNavigate()
-
-  const signalColor = (s: string) => s === 'bull' ? 'text-green-400' : s === 'bear' ? 'text-red-400' : 'text-secondary-text'
-  const signalBg    = (s: string) => s === 'bull' ? 'bg-green-400/10 border-green-400/25' : s === 'bear' ? 'bg-red-400/10 border-red-400/25' : 'bg-muted/40 border-border/40'
-  const lifeColor   = (stage: string) => stage === 'new' ? 'text-blue-400' : stage === 'hot' ? 'text-orange-400' : 'text-slate-400'
 
   const SCOPE_TABS = [
     { key: 'tomorrow' as const, label: '🎯 明日重点' },
@@ -486,13 +848,18 @@ function MarketFocus() {
     { key: 'month'    as const, label: '🌙 月聚焦'   },
   ]
 
+  const statusStyle = (status: string) =>
+    status === 'continue' ? 'bg-orange-400/10 text-orange-400 border border-orange-400/25'
+      : status === 'fade_risk' ? 'bg-slate-400/10 text-slate-400 border border-slate-400/25'
+        : 'bg-blue-400/10 text-blue-400 border border-blue-400/25'
+
   return (
     <div className="space-y-4">
 
       {/* ── 顶部 scope tab ── */}
       <div className="flex gap-1 p-1 rounded-lg bg-muted/60">
         {SCOPE_TABS.map(({ key, label }) => (
-          <button key={key} onClick={() => setScope(key)}
+          <button key={key} onClick={() => { setScope(key); if (key !== 'tomorrow') onScopeFirstOpen(key) }}
             className={cn(
               'flex-1 text-center py-1.5 px-3 rounded-md text-xs font-medium transition-all',
               scope === key
@@ -509,161 +876,174 @@ function MarketFocus() {
         <div className="flex items-center gap-2">
           <span className="text-base">🎯</span>
           <span className="text-sm font-semibold text-foreground">明日重点聚焦</span>
-          <span className="text-[10.5px] text-secondary-text ml-1">9月22日 周二</span>
+          {tomorrow && <span className="text-[10.5px] text-secondary-text ml-1">{fmtDay(tomorrow.for_date)}</span>}
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-2">
-            <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide">关键事件</div>
-            <ul className="space-y-1 text-xs text-foreground/80">
-              <li>· 300424 中试产线进度公告（盘前）</li>
-              <li>· 美国半导体设备新限制名单落地</li>
-            </ul>
-          </div>
-          <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-2">
-            <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide">关注板块</div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[10.5px] px-2 py-1 rounded-md bg-orange-400/10 text-orange-400 border border-orange-400/25">固态电池（发酵延续候选）</span>
-              <span className="text-[10.5px] px-2 py-1 rounded-md bg-slate-400/10 text-slate-400 border border-slate-400/25">算力租赁（退潮风险）</span>
-              <span className="text-[10.5px] px-2 py-1 rounded-md bg-blue-400/10 text-blue-400 border border-blue-400/25">半导体设备（冰点试错）</span>
+        {!tomorrow ? (
+          <EmptyHint text="待生成，预计收盘后更新" />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-2">
+                <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide">关键事件</div>
+                {tomorrow.key_events.length === 0 ? (
+                  <div className="text-xs text-secondary-text">暂无事件数据</div>
+                ) : (
+                  <ul className="space-y-1 text-xs text-foreground/80">
+                    {tomorrow.key_events.map((e, i) => (
+                      <li key={i}>· {e.code ? `${e.code} ` : ''}{e.title}{e.time ? `（${e.time}）` : ''}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-2">
+                <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide">关注板块</div>
+                {tomorrow.sector_watch.length === 0 ? (
+                  <div className="text-xs text-secondary-text">暂无板块数据</div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {tomorrow.sector_watch.map((s) => (
+                      <span key={s.name} className={cn('text-[10.5px] px-2 py-1 rounded-md', statusStyle(s.status))}>
+                        {s.name}（{s.reason}）
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2.5">
-          <div className="text-[10.5px] font-semibold text-amber-500 mb-1">🧭 AI 前瞻</div>
-          <p className="text-xs text-foreground/80 leading-relaxed">
-            短线退潮第 2 日，看固态电池能否接棒算力成为新主线；未确认转强前只做低位首板/二板。
-          </p>
-        </div>
+            {tomorrow.stock_watch.length > 0 && (
+              <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-1.5">
+                <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide">关注个股</div>
+                {tomorrow.stock_watch.map((s) => (
+                  <div key={s.code} className="flex items-center gap-2 text-xs">
+                    <span className="font-semibold text-foreground">{s.code} {s.name}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[hsl(var(--primary))/10] text-[hsl(var(--primary))]">{s.label}</span>
+                    {s.concept && <span className="text-[10px] text-secondary-text">{s.concept}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2.5">
+              <div className="text-[10.5px] font-semibold text-amber-500 mb-1">🧭 AI 前瞻</div>
+              <p className="text-xs text-foreground/80 leading-relaxed">{tomorrow.ai_preview || '待生成'}</p>
+            </div>
+          </>
+        )}
       </div>}
 
-      {/* ── ② 周聚焦 ── */}
-      {scope === 'week' && <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
+      {/* ── ② / ③ 周聚焦 / 月聚焦 ── */}
+      {(scope === 'week' || scope === 'month') && <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-base">📅</span>
-          <span className="text-sm font-semibold text-foreground">周聚焦</span>
+          <span className="text-base">{scope === 'week' ? '📅' : '🌙'}</span>
+          <span className="text-sm font-semibold text-foreground">{scope === 'week' ? '周聚焦' : '月聚焦'}</span>
         </div>
 
-        {/* 时间轴 */}
-        <div className="flex gap-0.5 border-b border-border/30 pb-2">
-          {WEEK_DAYS.map((d, i) => (
-            <button key={d} onClick={() => setWeekDay(i)}
-              className={cn(
-                'flex-1 text-[10.5px] py-1.5 rounded-t-md transition-colors text-center',
-                weekDay === i
-                  ? 'bg-[hsl(var(--primary))/10] text-[hsl(var(--primary))] font-bold'
-                  : 'text-secondary-text hover:text-foreground',
-              )}>
-              {i === WEEK_DAYS.length - 1
-                ? <span className="flex flex-col items-center gap-0.5"><span className="text-[8.5px] text-[hsl(var(--primary))]">今日</span>{fmtDay(d)}</span>
-                : fmtDay(d)}
-            </button>
-          ))}
-        </div>
+        {/* 内容 Tab（月聚焦暂只保留板块主线） */}
+        {scope === 'week' && (
+          <div className="flex gap-1">
+            {([['event', '🔥 热点事件'], ['stock', '⭐ 焦点个股'], ['sector', '📊 热点板块']] as const).map(([k, label]) => (
+              <button key={k} onClick={() => setFocusTab(k)}
+                className={cn('text-[10.5px] px-3 py-1 rounded-md border transition-colors',
+                  focusTab === k ? 'bg-muted border-border text-foreground font-semibold' : 'border-border/30 text-secondary-text hover:border-border')}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {/* 内容 Tab */}
-        <div className="flex gap-1">
-          {([['event','🔥 热点事件'],['stock','⭐ 焦点个股'],['sector','📊 热点板块']] as const).map(([k,label]) => (
-            <button key={k} onClick={() => setFocusTab(k)}
-              className={cn('text-[10.5px] px-3 py-1 rounded-md border transition-colors',
-                focusTab === k ? 'bg-muted border-border text-foreground font-semibold' : 'border-border/30 text-secondary-text hover:border-border')}>
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {focusTab === 'event' && (
+        {scope === 'month' && (
           <div className="space-y-2">
-            {EVENTS.map((e, i) => (
-              <div key={i} className={cn('rounded-xl border p-3 space-y-2', signalBg(e.signal))}>
+            {(focusMonth?.sectors ?? []).length === 0 ? (
+              <EmptyHint text="月度汇总数据采集中（周末生成）" />
+            ) : focusMonth!.sectors.map((sec) => (
+              <div key={sec.sector_name} className="flex items-center gap-3 rounded-lg border border-border/40 px-3 py-2.5 text-xs">
+                <span className="font-semibold text-foreground w-20 shrink-0">{sec.sector_name}</span>
+                <span className={cn('font-bold', (sec.chg_pct ?? 0) >= 0 ? 'text-green-400' : 'text-red-400')}>{fmtPct(sec.chg_pct)}</span>
+                {sec.leader_code && <span className="text-secondary-text">龙头 {sec.leader_code} {sec.leader_name}</span>}
+                {sec.lifecycle_stage && <span className="ml-auto text-[10.5px] text-secondary-text">{sec.lifecycle_stage}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {scope === 'week' && focusTab === 'event' && (
+          <div className="space-y-2">
+            {(focusWeek?.events ?? []).length === 0 ? (
+              <EmptyHint text="热点事件数据采集中" />
+            ) : focusWeek!.events.map((e, i) => (
+              <div key={i} className={cn('rounded-xl border p-3 space-y-2',
+                e.sentiment === 'positive' ? 'bg-green-400/10 border-green-400/25'
+                  : e.sentiment === 'negative' ? 'bg-red-400/10 border-red-400/25'
+                    : 'bg-muted/40 border-border/40')}>
                 <div className="flex items-start gap-2">
-                  <span className={cn('text-[10.5px] font-bold shrink-0', signalColor(e.signal))}>{e.signal === 'bull' ? '🔴 利好' : '🟢 利空'}</span>
+                  <span className={cn('text-[10.5px] font-bold shrink-0',
+                    e.sentiment === 'positive' ? 'text-green-400' : e.sentiment === 'negative' ? 'text-red-400' : 'text-secondary-text')}>
+                    {e.sentiment === 'positive' ? '🔴 利好' : e.sentiment === 'negative' ? '🟢 利空' : '⚪ 中性'}
+                  </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-[10px] text-secondary-text">{e.time}</span>
-                      <span className="text-[10px] px-1.5 py-px rounded bg-muted/60 text-secondary-text">{e.type}</span>
-                      {e.sectors.map((s) => <span key={s} className="text-[10px] px-1.5 py-px rounded bg-blue-400/10 text-blue-400">{s}</span>)}
+                      <span className="text-[10px] text-secondary-text">{e.event_date}</span>
+                      {e.event_type && <span className="text-[10px] px-1.5 py-px rounded bg-muted/60 text-secondary-text">{e.event_type}</span>}
+                      {e.related_sectors.map((s) => <span key={s} className="text-[10px] px-1.5 py-px rounded bg-blue-400/10 text-blue-400">{s}</span>)}
                     </div>
                     <p className="text-xs text-foreground font-medium leading-snug">{e.title}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 text-[10.5px]">
-                  <span className={cn('font-semibold', lifeColor(e.lifeStage))}>{e.life}</span>
-                  <span className="text-secondary-text">·</span>
-                  <span className="text-secondary-text flex-1">{e.bg}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {e.stocks.map((s) => <span key={s.code} className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 text-secondary-text">{s.code} <span className="text-green-400">{s.pct}</span></span>)}
-                  <button onClick={() => navigate('/expectations/new')} className="ml-auto flex items-center gap-1 text-[10px] text-[hsl(var(--primary))] border border-[hsl(var(--primary))/30] px-2 py-0.5 rounded hover:bg-[hsl(var(--primary))/8] transition-colors">
-                    <Plus className="w-2.5 h-2.5" />写入预期
-                  </button>
-                </div>
+                {e.impact_label && (
+                  <div className="flex items-center gap-2 text-[10.5px]">
+                    <span className="text-secondary-text">{e.impact_label}</span>
+                    <button onClick={() => navigate('/expectations/new')} className="ml-auto flex items-center gap-1 text-[10px] text-[hsl(var(--primary))] border border-[hsl(var(--primary))/30] px-2 py-0.5 rounded hover:bg-[hsl(var(--primary))/8] transition-colors">
+                      <Plus className="w-2.5 h-2.5" />写入预期
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
 
-        {focusTab === 'stock' && (
+        {scope === 'week' && focusTab === 'stock' && (
           <div className="space-y-1.5">
-            {FOCUS_STOCKS.map((s) => (
-              <div key={s.code} className="flex items-start gap-3 rounded-lg border border-border/40 px-3 py-2.5 hover:bg-muted/20 transition-colors">
+            {(focusWeek?.stocks ?? []).length === 0 ? (
+              <EmptyHint text="焦点个股数据采集中（收盘后更新）" />
+            ) : focusWeek!.stocks.map((s) => (
+              <div key={s.stock_code} className="flex items-start gap-3 rounded-lg border border-border/40 px-3 py-2.5 hover:bg-muted/20 transition-colors">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-foreground">{s.code} {s.name}</span>
-                    <span className={cn('text-xs font-bold', s.pct.startsWith('+') ? 'text-green-400' : 'text-red-400')}>{s.pct}</span>
-                    <span className="text-[10px] text-secondary-text">{s.vol}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 text-secondary-text">{s.sector}</span>
-                    <span className={cn('text-[10px] font-semibold', s.trend === 'up' ? 'text-green-400' : s.trend === 'new' ? 'text-blue-400' : s.trend === 'out' ? 'text-red-400' : 'text-secondary-text')}>
-                      {s.trend === 'up' ? `连续上榜 ${s.days} 天 ↑` : s.trend === 'new' ? '🆕 今日新进' : s.trend === 'out' ? '↓ 今日掉出' : `连续上榜 ${s.days} 天 →`}
+                    <span className="text-xs font-bold text-foreground">{s.stock_code} {s.stock_name}</span>
+                    <span className={cn('text-xs font-bold', (s.chg_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400')}>
+                      {s.chg_pct !== null ? `${s.chg_pct > 0 ? '+' : ''}${s.chg_pct.toFixed(2)}%` : '—'}
                     </span>
+                    {(s.boards ?? 0) > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 text-secondary-text">{s.boards}连板</span>}
+                    {s.concept_tags.map((t) => <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-400/10 text-blue-400">{t}</span>)}
                   </div>
-                  <p className="text-[10.5px] text-secondary-text mt-1">{s.reason}</p>
+                  {s.reason && <p className="text-[10.5px] text-secondary-text mt-1">{s.reason}</p>}
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {focusTab === 'sector' && (
+        {scope === 'week' && focusTab === 'sector' && (
           <div className="space-y-2">
-            {HOT_SECTORS.map((sec) => (
-              <div key={sec.name} className="flex items-center gap-3 rounded-lg border border-border/40 px-3 py-2.5">
-                <span className="text-xs font-semibold text-foreground w-20 shrink-0">{sec.name}</span>
-                <span className={cn('text-xs font-bold', sec.pct.startsWith('+') ? 'text-green-400' : 'text-red-400')}>{sec.pct}</span>
-                <span className="text-[10.5px] text-secondary-text">{sec.flow}</span>
-                <span className="text-[10.5px] text-secondary-text">龙头 {sec.leader}</span>
-                <div className="ml-auto flex items-end gap-0.5 h-5">
-                  {sec.hist.map((v, i) => (
-                    <div key={i} className={cn('w-3 rounded-sm', i === sec.hist.length - 1 ? 'bg-[hsl(var(--primary))]' : 'bg-muted')} style={{ height: `${Math.max(v * 14, 4)}%` }} />
-                  ))}
-                </div>
-                <span className="text-[9.5px] text-secondary-text ml-1">{sec.hist.join('→')}</span>
+            {(focusWeek?.sectors ?? []).length === 0 ? (
+              <EmptyHint text="热点板块数据采集中（收盘后更新）" />
+            ) : focusWeek!.sectors.map((sec) => (
+              <div key={sec.sector_name} className="flex items-center gap-3 rounded-lg border border-border/40 px-3 py-2.5">
+                <span className="text-xs font-semibold text-foreground w-20 shrink-0">{sec.sector_name}</span>
+                <span className={cn('text-xs font-bold', (sec.chg_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400')}>{fmtPct(sec.chg_pct)}</span>
+                {sec.lifecycle_stage && <span className="text-[10.5px] text-secondary-text">{sec.lifecycle_stage}</span>}
+                {sec.limit_up_trend && sec.limit_up_trend.length > 0 && (
+                  <div className="ml-auto flex items-end gap-0.5 h-5">
+                    {sec.limit_up_trend.map((v, i) => (
+                      <div key={i} className={cn('w-3 rounded-sm', i === sec.limit_up_trend!.length - 1 ? 'bg-[hsl(var(--primary))]' : 'bg-muted')} style={{ height: `${Math.max(v * 14, 4)}%` }} />
+                    ))}
+                    <span className="text-[9.5px] text-secondary-text ml-1">{sec.limit_up_trend.join('→')}</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
-      </div>}
-
-      {/* ── ③ 月聚焦 ── */}
-      {scope === 'month' && <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="text-base">🌙</span>
-          <span className="text-sm font-semibold text-foreground">月聚焦</span>
-          <span className="text-[10.5px] text-secondary-text ml-1">近 20 日</span>
-        </div>
-        <div className="space-y-2">
-          {[
-            { name: '固态电池', pct: '+18%', leader: '300424', leaderPct: '+42%', life: '🔥 发酵(第9天)', color: 'text-orange-400' },
-            { name: '算力租赁', pct: '+11%', leader: '600713', leaderPct: '+31%', life: '🧊 退潮(第2天)', color: 'text-slate-400' },
-          ].map((m) => (
-            <div key={m.name} className="flex items-center gap-3 rounded-lg border border-border/40 px-3 py-2.5 text-xs">
-              <span className="font-semibold text-foreground w-20 shrink-0">{m.name}</span>
-              <span className="text-green-400 font-bold">{m.pct}</span>
-              <span className="text-secondary-text">龙头 {m.leader} <span className="text-green-400">{m.leaderPct}</span></span>
-              <span className={cn('ml-auto font-semibold', m.color)}>{m.life}</span>
-            </div>
-          ))}
-        </div>
-        <div className="text-[10.5px] text-secondary-text">月度风格：小盘题材占优 · 成长强于价值 · 资金集中固态电池/算力</div>
       </div>}
     </div>
   )
@@ -675,13 +1055,75 @@ type SubView = 'emotion' | 'ladder' | 'focus'
 
 export default function SentimentPage() {
   const [subView, setSubView] = useState<SubView>('emotion')
-  const [selectedDay, setSelectedDay] = useState(DAYS.length - 1)
+
+  const [overview, setOverview] = useState<SentimentOverview | null>(null)
+  const [trend, setTrend] = useState<SentimentTrendPoint[]>([])
+  const [ladderTrend, setLadderTrend] = useState<LadderPoint[]>([])
+  const [ladderUp, setLadderUp] = useState<LadderTodayResponse | null>(null)
+  const [ladderDown, setLadderDown] = useState<LadderTodayResponse | null>(null)
+  const [focusWeek, setFocusWeek] = useState<FocusResponse | null>(null)
+  const [focusMonth, setFocusMonth] = useState<FocusResponse | null>(null)
+  const [tomorrow, setTomorrow] = useState<TomorrowFocus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState<string[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setFailed([])
+      const results = await Promise.allSettled([
+        sentimentApi.getOverview(),
+        sentimentApi.getTrend(10),
+        sentimentApi.getLadderTrend(5),
+        sentimentApi.getLadderToday('limit_up'),
+        sentimentApi.getFocus('week'),
+        sentimentApi.getTomorrow(),
+      ])
+      if (cancelled) return
+      const failures: string[] = []
+      if (results[0].status === 'fulfilled') setOverview(results[0].value); else failures.push('overview')
+      if (results[1].status === 'fulfilled') setTrend(results[1].value.items); else failures.push('trend')
+      if (results[2].status === 'fulfilled') setLadderTrend(results[2].value.items); else failures.push('ladder')
+      if (results[3].status === 'fulfilled') setLadderUp(results[3].value); else failures.push('ladder-today')
+      if (results[4].status === 'fulfilled') setFocusWeek(results[4].value); else failures.push('focus-week')
+      if (results[5].status === 'fulfilled') setTomorrow(results[5].value); else failures.push('tomorrow')
+      setFailed(failures)
+      setLoading(false)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  // 月聚焦 / 跌停池懒加载（缓存）
+  const [monthLoaded, setMonthLoaded] = useState(false)
+  const [downLoaded, setDownLoaded] = useState(false)
+  const handleScopeFirstOpen = (scope: FocusScope) => {
+    if (scope === 'month' && !monthLoaded) {
+      setMonthLoaded(true)
+      sentimentApi.getFocus('month')
+        .then(setFocusMonth)
+        .catch(() => setFocusMonth(null))
+    }
+  }
+  const handlePoolFirstOpen = (t: PoolType) => {
+    if (t === 'limit_down' && !downLoaded) {
+      setDownLoaded(true)
+      sentimentApi.getLadderToday('limit_down')
+        .then(setLadderDown)
+        .catch(() => setLadderDown(null))
+    }
+  }
 
   const SUB_VIEWS: { key: SubView; label: string }[] = [
     { key: 'emotion', label: '① 情绪演化' },
-    { key: 'ladder', label: '② 涨停梯队演化' },
+    { key: 'ladder', label: '② 涨停聚焦' },
     { key: 'focus',  label: '③ 市场聚焦演化' },
   ]
+
+  const headerDate = overview?.trade_date
+    ? `${overview.trade_date} ${overview.is_complete ? '· 收盘快照' : '· 盘中/未采集'}`
+    : '数据加载中…'
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -691,7 +1133,7 @@ export default function SentimentPage() {
           <Thermometer className="w-4 h-4 text-[hsl(var(--primary))]" />
           <h1 className="text-sm font-semibold text-foreground">大盘情绪</h1>
         </div>
-        <span className="text-xs text-secondary-text">2026-09-21 周一 · 盘中 14:32 更新</span>
+        <span className="text-xs text-secondary-text">{headerDate}</span>
       </div>
 
       {/* 子视图导航 */}
@@ -713,20 +1155,50 @@ export default function SentimentPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="px-5 py-4 space-y-4">
 
-          {subView === 'emotion' && (
+          {loading && (
+            <div className="rounded-xl border border-border/50 bg-card px-4 py-10 text-center text-xs text-secondary-text">
+              情绪数据加载中…
+            </div>
+          )}
+
+          {!loading && subView === 'emotion' && (
             <>
-              <OverseasCard />
-              <MainAxis selectedDay={selectedDay} onSelectDay={setSelectedDay} />
-              <DualDimension />
+              <OverseasCard overseas={overview?.overseas ?? null} />
+              <MainAxis overview={overview} trend={trend} />
+              <DualDimension overview={overview} trend={trend} ladderTrend={ladderTrend} />
             </>
           )}
 
-          {subView === 'ladder' && <LimitUpLadder />}
+          {!loading && subView === 'ladder' && (
+            <LimitFocus
+              ladderUp={ladderUp}
+              ladderDown={ladderDown}
+              ladderTrend={ladderTrend}
+              overview={overview}
+              onPoolFirstOpen={handlePoolFirstOpen}
+            />
+          )}
 
-          {subView === 'focus'  && <MarketFocus />}
+          {!loading && subView === 'focus' && (
+            <MarketFocus
+              tomorrow={tomorrow}
+              focusWeek={focusWeek}
+              focusMonth={focusMonth}
+              onScopeFirstOpen={handleScopeFirstOpen}
+            />
+          )}
+
+          {!loading && failed.length > 0 && (
+            <div className="rounded-lg bg-amber-400/8 border border-amber-400/25 px-3 py-2 flex gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
+                部分数据加载失败（{failed.join('、')}），可刷新重试；确认后端已启动且已登录。
+              </p>
+            </div>
+          )}
 
           <p className="text-[10.5px] text-secondary-text/40 text-center pb-2">
-            以上为演示数据 · 后端接入 AkShare 后实时更新
+            数据来源：data_provider 多源自动回退 · 收盘采集后以快照表为准
           </p>
         </div>
       </div>

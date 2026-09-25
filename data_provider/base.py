@@ -449,6 +449,46 @@ class BaseFetcher(ABC):
         """
         return None
 
+    def get_limit_down_pool(
+        self,
+        date: Optional[str] = None,
+        n: int = 20,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取跌停池。
+
+        Args:
+            date: YYYYMMDD，默认由具体数据源决定
+            n: 返回条数
+        """
+        return None
+
+    def get_blown_pool(
+        self,
+        date: Optional[str] = None,
+        n: int = 20,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取炸板池（当日曾涨停后打开的股票）。
+
+        Args:
+            date: YYYYMMDD，默认由具体数据源决定
+            n: 返回条数
+        """
+        return None
+
+    def get_market_news(
+        self,
+        n: int = 50,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取市场级财经快讯（大盘情绪页周热点事件数据源）。
+
+        Returns:
+            [{title, summary, published_at, url, source}]，无数据返回 None
+        """
+        return None
+
     def get_daily_data(
         self,
         stock_code: str, 
@@ -4809,24 +4849,74 @@ class DataFetcherManager:
             logger.warning(f"[人气股] 所有数据源均失败，最终错误: {last_error}")
         return []
 
+    def _fetch_pool_with_fallback(
+        self,
+        method_name: str,
+        label: str,
+        date: Optional[str],
+        n: int,
+    ) -> List[Dict[str, Any]]:
+        """按数据源优先级遍历取池数据，全部失败返回空列表。"""
+        last_error = ""
+        for fetcher in self._fetchers:
+            method = getattr(fetcher, method_name, None)
+            if method is None:
+                continue
+            try:
+                data = method(date=date, n=n)
+                if data:
+                    logger.info(f"[{fetcher.name}] 获取{label}成功")
+                    return data[:n]
+                last_error = f"{fetcher.name}返回空结果"
+            except Exception as e:
+                error_type, error_reason = summarize_exception(e)
+                last_error = f"{fetcher.name} ({error_type}) {error_reason}"
+                logger.warning(f"[{fetcher.name}] 获取{label}失败: {error_reason}")
+        if last_error:
+            logger.warning(f"[{label}] 所有数据源均失败，最终错误: {last_error}")
+        return []
+
     def get_limit_up_pool(
         self,
         date: Optional[str] = None,
         n: int = 20,
     ) -> List[Dict[str, Any]]:
         """获取涨停池与连板梯队（自动切换数据源）。"""
+        return self._fetch_pool_with_fallback('get_limit_up_pool', '涨停池', date, n)
+
+    def get_limit_down_pool(
+        self,
+        date: Optional[str] = None,
+        n: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """获取跌停池（自动切换数据源）。"""
+        return self._fetch_pool_with_fallback('get_limit_down_pool', '跌停池', date, n)
+
+    def get_blown_pool(
+        self,
+        date: Optional[str] = None,
+        n: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """获取炸板池（自动切换数据源）。"""
+        return self._fetch_pool_with_fallback('get_blown_pool', '炸板池', date, n)
+
+    def get_market_news(self, n: int = 50) -> List[Dict[str, Any]]:
+        """获取市场级财经快讯（自动切换数据源），全部失败返回空列表。"""
         last_error = ""
         for fetcher in self._fetchers:
+            method = getattr(fetcher, 'get_market_news', None)
+            if method is None:
+                continue
             try:
-                data = fetcher.get_limit_up_pool(date=date, n=n)
+                data = method(n=n)
                 if data:
-                    logger.info(f"[{fetcher.name}] 获取涨停池成功")
+                    logger.info(f"[{fetcher.name}] 获取财经快讯成功")
                     return data[:n]
                 last_error = f"{fetcher.name}返回空结果"
             except Exception as e:
                 error_type, error_reason = summarize_exception(e)
                 last_error = f"{fetcher.name} ({error_type}) {error_reason}"
-                logger.warning(f"[{fetcher.name}] 获取涨停池失败: {error_reason}")
+                logger.warning(f"[{fetcher.name}] 获取财经快讯失败: {error_reason}")
         if last_error:
-            logger.warning(f"[涨停池] 所有数据源均失败，最终错误: {last_error}")
+            logger.warning(f"[财经快讯] 所有数据源均失败，最终错误: {last_error}")
         return []

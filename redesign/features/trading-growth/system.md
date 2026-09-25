@@ -2,7 +2,7 @@
 
 > 版本: v0.1 草稿
 > 日期: 2026-09-18
-> 关联文档: [expectation-management.md](expectation-management.md)
+> 关联文档: [expectation-management.md](../market-sentiment/expectation-management.md)
 
 ---
 

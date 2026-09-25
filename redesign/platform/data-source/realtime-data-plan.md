@@ -1,8 +1,8 @@
 # 实时数据获取方案
 
 > 生成日期：2026-09-22
-> 目标：让 feture-ui 大盘情绪页所需的各数据项，以「可接受的实时程度」获取。
-> 前置：见同目录 `data-source-audit.md`（数据源现状）与 `../storage-audit.md`（存储现状）。
+> 目标：让 redesign 大盘情绪页所需的各数据项，以「可接受的实时程度」获取。
+> 前置：见同目录 `data-source-audit.md`（数据源现状）与 `../storage/storage-audit.md`（存储现状）。
 类似项目：https://github.com/Doubixilin/moyu-kanpan
 > 同花顺金融数据API：https://fuyao.aicubes.cn/docs/api-reference/prices/
 ---
@@ -45,11 +45,11 @@
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│                    大盘情绪页 (feture-ui)                │
+│                    大盘情绪页 (redesign)                │
 └───────────────────────────┬────────────────────────────┘
                             │ REST/JSON API (Pydantic)
 ┌───────────────────────────▼────────────────────────────┐
-│                   数据服务层 (feture-ui/server)           │
+│                   数据服务层 (redesign/server)           │
 │  · 轮询调度器（分钟级 tick，多源并行）                      │
 │  · 短 TTL 缓存 + 负缓存 + 熔断降级                         │
 │  · 计算层：龙头/小弟识别 · 量能轨迹 · 双维度温度 · 外盘温度   │
@@ -88,10 +88,10 @@
    - 两融 `stock_margin_sse` / `stock_margin_szse`
    - 美股 SOX（^SOX）、纳斯达克中国金龙 → 补进 `us_index_mapping.py`
    - 韩股三星（005930.KS）、SK海力士（000660.KS）个股代码
-2. **快照存储层**（`feture-ui/server` 或 `src/`）：
+2. **快照存储层**（`redesign/server` 或 `src/`）：
    - 15:30 每日情绪快照（JSON 或 SQLite 加表）
    - 累积成情绪时间序列，支撑「近 N 日轨迹」
-3. **数据 API 骨架**（`feture-ui/server`）：
+3. **数据 API 骨架**（`redesign/server`）：
    - 直接调 `DataFetcherManager`，返回 Pydantic 结构化 JSON（不经过 agent 工具文本链路）
 4. **轮询调度器**：分钟级 tick + 多源并行 + 熔断 + 短 TTL 缓存
 

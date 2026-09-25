@@ -24,6 +24,7 @@ from api.v1.endpoints import (
     health,
     history,
     intelligence,
+    market_sentiment,
     portfolio,
     stocks,
     system_config,
@@ -122,6 +123,12 @@ router.include_router(
     expectations.router,
     prefix="/expectations",
     tags=["Expectations"]
+)
+
+router.include_router(
+    market_sentiment.router,
+    prefix="/market-sentiment",
+    tags=["MarketSentiment"]
 )
 
 router.include_router(
