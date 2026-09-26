@@ -489,6 +489,33 @@ class BaseFetcher(ABC):
         """
         return None
 
+    def get_economic_calendar(
+        self,
+        date: str,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取指定日期财经日历（大盘情绪页事件数据源）。
+
+        Returns:
+            [{date, time, region, event, importance, expect, previous, published}]，
+            无数据返回 None
+        """
+        return None
+
+    def get_sector_history(
+        self,
+        sector_name: str,
+        start_date: str,
+        end_date: str,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        获取行业板块区间日线（周/月聚焦板块回溯涨幅）。
+
+        Returns:
+            [{date, close, chg_pct}] 按日期升序，无数据返回 None
+        """
+        return None
+
     def get_daily_data(
         self,
         stock_code: str, 
@@ -661,6 +688,7 @@ class DataFetcherManager:
         "TencentFetcher": {"cn"},
         "AkshareFetcher": {"cn", "hk"},
         "TushareFetcher": {"cn", "hk"},
+        "ThsFetcher": {"cn"},
         "TickFlowFetcher": {"cn"},
         "PytdxFetcher": {"cn"},
         "BaostockFetcher": {"cn"},
@@ -1848,6 +1876,13 @@ class DataFetcherManager:
             optional_fetchers.append(TushareFetcher())  # 会根据 Token 配置自动调整优先级
         else:
             logger.debug("[数据源初始化] 跳过未配置的 TushareFetcher")
+
+        hithink_api_key = (getattr(config, "hithink_finance_api_key", None) or "").strip()
+        if hithink_api_key:
+            from .ths_fetcher import ThsFetcher
+            optional_fetchers.append(ThsFetcher())  # 会根据 key 配置自动调整优先级
+        else:
+            logger.debug("[数据源初始化] 跳过未配置的 ThsFetcher")
 
         tickflow_api_key = (getattr(config, "tickflow_api_key", None) or "").strip()
         if tickflow_api_key:
@@ -3296,6 +3331,19 @@ class DataFetcherManager:
                         return data
                 except Exception as e:
                     logger.warning(f"[TickFlowFetcher] 获取指数行情失败: {e}")
+
+            # 同花顺指数快照（配置 key 时优先：口径稳定且自带沪深成交额，供情绪页拆分）
+            ths_fetcher = next(
+                (f for f in self._fetchers if f.name == "ThsFetcher"), None
+            )
+            if ths_fetcher is not None and ths_fetcher.is_available():
+                try:
+                    data = ths_fetcher.get_main_indices(region=region)
+                    if data:
+                        logger.info("[ThsFetcher] 获取指数行情成功（优先源）")
+                        return data
+                except Exception as e:
+                    logger.warning(f"[ThsFetcher] 获取指数行情失败: {e}")
 
         for fetcher in self._fetchers:
             if region == "cn" and fetcher.name == "TickFlowFetcher":
@@ -4919,4 +4967,49 @@ class DataFetcherManager:
                 logger.warning(f"[{fetcher.name}] 获取财经快讯失败: {error_reason}")
         if last_error:
             logger.warning(f"[财经快讯] 所有数据源均失败，最终错误: {last_error}")
+        return []
+
+    def get_economic_calendar(self, date: str) -> List[Dict[str, Any]]:
+        """获取指定日期财经日历（自动切换数据源），全部失败返回空列表。"""
+        last_error = ""
+        for fetcher in self._fetchers:
+            method = getattr(fetcher, 'get_economic_calendar', None)
+            if method is None:
+                continue
+            try:
+                data = method(date=date)
+                if data is not None:
+                    logger.info(f"[{fetcher.name}] 获取财经日历成功（{len(data)}条）")
+                    return data
+                last_error = f"{fetcher.name}返回空结果"
+            except Exception as e:
+                error_type, error_reason = summarize_exception(e)
+                last_error = f"{fetcher.name} ({error_type}) {error_reason}"
+                logger.warning(f"[{fetcher.name}] 获取财经日历失败: {error_reason}")
+        if last_error:
+            logger.warning(f"[财经日历] 所有数据源均失败，最终错误: {last_error}")
+        return []
+
+    def get_sector_history(
+        self, sector_name: str, start_date: str, end_date: str
+    ) -> List[Dict[str, Any]]:
+        """获取行业板块区间日线（自动切换数据源），全部失败返回空列表。"""
+        last_error = ""
+        for fetcher in self._fetchers:
+            method = getattr(fetcher, 'get_sector_history', None)
+            if method is None:
+                continue
+            try:
+                data = method(
+                    sector_name=sector_name, start_date=start_date, end_date=end_date,
+                )
+                if data is not None:
+                    return data
+                last_error = f"{fetcher.name}返回空结果"
+            except Exception as e:
+                error_type, error_reason = summarize_exception(e)
+                last_error = f"{fetcher.name} ({error_type}) {error_reason}"
+                logger.warning(f"[{fetcher.name}] 获取板块日线失败: {error_reason}")
+        if last_error:
+            logger.warning(f"[板块日线] 所有数据源均失败，最终错误: {last_error}")
         return []

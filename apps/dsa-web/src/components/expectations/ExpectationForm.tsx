@@ -39,12 +39,12 @@ const MAG_OPTS: { value: IndexMagnitude; label: string }[] = [
 function SectionHead({ step, title, sub }: { step: string; title: string; sub?: string }) {
   return (
     <div className="flex items-start gap-2 mb-3">
-      <span className="shrink-0 w-5 h-5 rounded-full bg-[hsl(var(--primary))/15] text-[hsl(var(--primary))] text-[10px] font-bold flex items-center justify-center mt-0.5">
+      <span className="shrink-0 w-5 h-5 rounded-full bg-[hsl(var(--primary))/15] text-[hsl(var(--primary))] text-[11px] font-bold flex items-center justify-center mt-0.5">
         {step}
       </span>
       <div>
         <div className="text-xs font-semibold text-foreground">{title}</div>
-        {sub && <div className="text-[10.5px] text-secondary-text mt-0.5">{sub}</div>}
+        {sub && <div className="text-[11px] text-secondary-text mt-0.5">{sub}</div>}
       </div>
     </div>
   )
@@ -227,7 +227,7 @@ export function ExpectationForm({ initial, onSubmit, isSubmitting, onCancel }: P
           <div className="space-y-1.5">
             {keyAssumptions.map((a, i) => (
               <div key={i} className="flex gap-1.5 items-center">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium text-secondary-text">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[11px] font-medium text-secondary-text">
                   {i + 1}
                 </span>
                 <input
@@ -259,11 +259,11 @@ export function ExpectationForm({ initial, onSubmit, isSubmitting, onCancel }: P
           className="w-full flex items-center justify-between px-4 py-3 text-xs text-secondary-text hover:text-foreground hover:bg-muted/30 transition-colors"
         >
           <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium">3</span>
+            <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[11px] font-medium">3</span>
             <span className="font-semibold text-foreground">个股预期</span>
             <span className="text-secondary-text">（可选）</span>
             {stockExpectations.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-[hsl(var(--primary))/15] text-[hsl(var(--primary))] text-[10.5px] font-medium">
+              <span className="px-1.5 py-0.5 rounded-full bg-[hsl(var(--primary))/15] text-[hsl(var(--primary))] text-[11px] font-medium">
                 {stockExpectations.length} 只
               </span>
             )}

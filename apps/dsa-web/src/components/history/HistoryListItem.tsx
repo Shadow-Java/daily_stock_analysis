@@ -105,7 +105,7 @@ export const HistoryListItem: React.FC<HistoryListItemProps> = ({
               {phaseLabel ? (
                 <>
                   <span className="w-1 h-1 rounded-full bg-subtle-hover" />
-                  <Badge variant="default" size="sm" className="shrink-0 shadow-none text-[10px] leading-none">
+                  <Badge variant="default" size="sm" className="shrink-0 shadow-none text-[11px] leading-none">
                     {phaseLabel}
                   </Badge>
                 </>

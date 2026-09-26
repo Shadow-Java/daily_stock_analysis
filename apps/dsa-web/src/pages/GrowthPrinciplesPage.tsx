@@ -76,16 +76,16 @@ function ViolationBar({ pct }: { pct: number }) {
       <div className="flex-1 h-1.5 bg-muted/60 rounded-full overflow-hidden">
         <div className={cn('h-full rounded-full transition-all', c.bar)} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
-      <span className={cn('text-[10.5px] font-semibold w-8 text-right', c.text)}>{pct}%</span>
+      <span className={cn('text-[11px] font-semibold w-8 text-right', c.text)}>{pct}%</span>
     </div>
   )
 }
 
 function TrendLabel({ trend, value }: { trend?: 'up' | 'down' | 'flat'; value: number }) {
-  if (value === 0) return <span className="text-[10.5px] text-green-500 font-semibold">0% ✓ 完美遵守</span>
-  if (trend === 'down') return <span className="text-[10.5px] text-green-500">本月 {value}% ↓ 改善中</span>
-  if (trend === 'up') return <span className="text-[10.5px] text-red-500">本月 {value}% ↑ 未改善 ⚠</span>
-  return <span className="text-[10.5px] text-secondary-text">本月 {value}%</span>
+  if (value === 0) return <span className="text-[11px] text-green-500 font-semibold">0% ✓ 完美遵守</span>
+  if (trend === 'down') return <span className="text-[11px] text-green-500">本月 {value}% ↓ 改善中</span>
+  if (trend === 'up') return <span className="text-[11px] text-red-500">本月 {value}% ↑ 未改善 ⚠</span>
+  return <span className="text-[11px] text-secondary-text">本月 {value}%</span>
 }
 
 export default function GrowthPrinciplesPage() {
@@ -160,11 +160,11 @@ export default function GrowthPrinciplesPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-semibold text-foreground leading-snug">{p.title}</span>
                       {isHigh && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-500">
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-500">
                           高违规警示
                         </span>
                       )}
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 flex items-center gap-0.5">
+                      <span className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 flex items-center gap-0.5">
                         <CheckCircle className="w-2.5 h-2.5" /> 活跃
                       </span>
                     </div>
@@ -218,16 +218,16 @@ export default function GrowthPrinciplesPage() {
               className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border/40 bg-muted/30 text-xs text-secondary-text hover:bg-muted/50 transition-colors"
             >
               <span className="flex-1 text-left font-medium">已停用（{inactive.length} 条）</span>
-              <span className="text-[10px]">点击展开 ▾</span>
+              <span className="text-[11px]">点击展开 ▾</span>
             </button>
             <div className="mt-1.5 space-y-1.5">
               {inactive.map((p) => (
                 <div key={p.id} className="rounded-xl border border-border/30 bg-card/60 px-4 py-3 opacity-60">
                   <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-md bg-muted flex items-center justify-center text-[10px] font-bold text-secondary-text shrink-0">{p.id}</span>
+                    <span className="w-5 h-5 rounded-md bg-muted flex items-center justify-center text-[11px] font-bold text-secondary-text shrink-0">{p.id}</span>
                     <span className="text-xs text-secondary-text font-medium">{p.title}</span>
-                    <span className="text-[10px] text-secondary-text ml-auto">创建 {p.createdAt} · 违规率 0%</span>
-                    <button type="button" onClick={() => toggleActive(p.id)} className="text-[10.5px] text-[hsl(var(--primary))] hover:underline ml-1">重新启用</button>
+                    <span className="text-[11px] text-secondary-text ml-auto">创建 {p.createdAt} · 违规率 0%</span>
+                    <button type="button" onClick={() => toggleActive(p.id)} className="text-[11px] text-[hsl(var(--primary))] hover:underline ml-1">重新启用</button>
                   </div>
                 </div>
               ))}

@@ -27,13 +27,13 @@ export function DirectionBadge({
       className={cn(
         'inline-flex items-center gap-0.5 rounded-md border font-medium',
         size === 'sm'
-          ? 'px-1.5 py-px text-[10.5px]'
+          ? 'px-1.5 py-px text-[11px]'
           : 'px-2 py-0.5 text-xs',
         STYLE[direction],
         className,
       )}
     >
-      <span className="text-[10px] leading-none">{ICON[direction]}</span>
+      <span className="text-[11px] leading-none">{ICON[direction]}</span>
       {LABEL[direction]}
     </span>
   )

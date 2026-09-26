@@ -10,7 +10,7 @@ function ScoreChip({ score }: { score: number }) {
         ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
         : 'bg-red-500/10 text-red-500'
   return (
-    <span className={`text-[10.5px] font-semibold px-1.5 py-0.5 rounded ${cls}`}>
+    <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${cls}`}>
       执行 {score}{score < 70 ? ' ⚠' : ' ✅'}
     </span>
   )
@@ -19,9 +19,9 @@ function ScoreChip({ score }: { score: number }) {
 function StatChip({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-lg border border-border/50 bg-card px-4 py-3 flex-1 min-w-0">
-      <div className="text-[10.5px] text-secondary-text mb-1">{label}</div>
+      <div className="text-[11px] text-secondary-text mb-1">{label}</div>
       <div className="text-lg font-bold text-foreground leading-tight">{value}</div>
-      {sub && <div className="text-[10.5px] text-secondary-text mt-0.5">{sub}</div>}
+      {sub && <div className="text-[11px] text-secondary-text mt-0.5">{sub}</div>}
     </div>
   )
 }
@@ -189,18 +189,18 @@ export default function TradesPage() {
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="text-xs font-semibold text-foreground">{t.code} {t.name}</span>
                         <span
-                          className={`text-[10.5px] font-medium px-1.5 py-0.5 rounded
+                          className={`text-[11px] font-medium px-1.5 py-0.5 rounded
                             ${t.direction === 'buy'
                               ? 'bg-green-500/10 text-green-600 dark:text-green-400'
                               : 'bg-red-500/10 text-red-500'}`}
                         >
                           {t.direction === 'buy' ? '买入' : '卖出'}
                         </span>
-                        <span className="text-[10.5px] text-secondary-text">
+                        <span className="text-[11px] text-secondary-text">
                           {t.date} · {t.qty}股 @ {t.price.toFixed(2)}
                         </span>
                         {t.pnl && (
-                          <span className="text-[10.5px] font-semibold text-green-500">
+                          <span className="text-[11px] font-semibold text-green-500">
                             {t.pnl} ({t.pnlPct})
                           </span>
                         )}
@@ -218,14 +218,14 @@ export default function TradesPage() {
               <h2 className="text-xs font-semibold text-foreground mb-3">近 90 天交易习惯画像</h2>
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <p className="text-[10.5px] text-secondary-text uppercase tracking-wide font-semibold mb-2">出场习惯</p>
+                  <p className="text-[11px] text-secondary-text uppercase tracking-wide font-semibold mb-2">出场习惯</p>
                   <BarRow label="止盈出场" pct={42} color="#68d391" />
                   <BarRow label="止损出场" pct={11} color="#fc8181" note="⚠ 严重不足" />
                   <BarRow label="时间到期" pct={31} color="#a0aec0" />
                   <BarRow label="情绪性卖出" pct={16} color="#f6ad55" />
                 </div>
                 <div>
-                  <p className="text-[10.5px] text-secondary-text uppercase tracking-wide font-semibold mb-2">处置效应警告</p>
+                  <p className="text-[11px] text-secondary-text uppercase tracking-wide font-semibold mb-2">处置效应警告</p>
                   <div className="rounded-lg bg-red-500/8 border border-red-500/20 p-3">
                     <div className="flex items-center gap-1.5 mb-2">
                       <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
@@ -235,7 +235,7 @@ export default function TradesPage() {
                       <div>盈利单平均持仓 <span className="font-semibold text-foreground">2.8 天</span></div>
                       <div>亏损单平均持仓 <span className="font-semibold text-red-500">7.1 天</span></div>
                     </div>
-                    <p className="text-[10.5px] text-secondary-text mt-2">赢家卖太快，输家持太久</p>
+                    <p className="text-[11px] text-secondary-text mt-2">赢家卖太快，输家持太久</p>
                   </div>
                 </div>
               </div>

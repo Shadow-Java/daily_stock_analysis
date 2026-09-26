@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>锚定点栏目 — 静态 UI 稿 v0.1</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f0f4f9;
+    --bg2: #ffffff;
+    --card: #ffffff;
+    --card-border: #e2e8f0;
+    --text: #1a2035;
+    --text2: #4a5568;
+    --text3: #8896aa;
+    --primary: #00b8d9;
+    --primary-bg: #e6f9fc;
+    --primary-dark: #007fa3;
+    --green: #38a169;
+    --green-bg: #f0fff4;
+    --red: #e53e3e;
+    --red-bg: #fff5f5;
+    --yellow: #d69e2e;
+    --yellow-bg: #fffff0;
+    --orange: #dd6b20;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 4px rgba(0,0,0,.08), 0 2px 12px rgba(0,0,0,.04);
+  }
+
+  body {
+    font-family: "SF Pro Display", "Inter", -apple-system, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 24px;
+  }
+
+  .page-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .page-sub { color: var(--text3); font-size: 12px; margin-bottom: 20px; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-width: 1280px; }
+  .variant-label { font-size: 12px; font-weight: 600; color: var(--text2); margin: 22px 0 8px; }
+
+  /* ========== 锚定点卡片 ========== */
+  .anchor-card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 12px 14px;
+  }
+
+  .ac-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+  .ac-title { font-size: 13px; font-weight: 700; }
+  .ac-question { font-size: 11px; color: var(--text3); }
+  .ac-time { margin-left: auto; font-size: 10.5px; color: var(--text3); }
+
+  /* 提醒横幅 */
+  .banner {
+    display: flex; align-items: flex-start; gap: 8px;
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    font-size: 11.5px;
+    margin-bottom: 10px;
+  }
+  .banner b { font-weight: 700; }
+  .banner .b-time { margin-left: auto; color: var(--text3); font-size: 10.5px; white-space: nowrap; }
+  .banner.severe { background: var(--red-bg); border: 1px solid #fed7d7; color: var(--red); }
+  .banner.normal { background: var(--primary-bg); border: 1px solid #bde9f2; color: var(--primary-dark); }
+
+  /* 锚点区块 */
+  .ac-section { display: flex; gap: 8px; padding: 7px 0; }
+  .ac-section + .ac-section { border-top: 1px dashed var(--card-border); }
+  .ac-type {
+    flex-shrink: 0; width: 44px;
+    font-size: 10.5px; font-weight: 700; color: var(--text3);
+    padding-top: 2px;
+  }
+
+  .arow { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 12px; }
+  .arow .icon { font-size: 12px; flex-shrink: 0; }
+  .arow .name { font-weight: 600; }
+  .arow .meta { color: var(--text3); font-size: 11px; }
+  .arow .num { font-weight: 700; margin-left: auto; white-space: nowrap; }
+  .num.up { color: var(--red); }
+  .num.down { color: var(--green); }
+
+  /* 状态标签 */
+  .tag {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    padding: 1px 6px; border-radius: 4px; white-space: nowrap;
+  }
+  .tag.active  { background: var(--primary-bg); color: var(--primary-dark); }
+  .tag.pending { background: var(--yellow-bg); color: var(--yellow); }
+  .tag.bull    { background: var(--red-bg);    color: var(--red); }
+  .tag.bear    { background: var(--green-bg);  color: var(--green); }
+  .tag.done    { background: #edf0f5; color: var(--text3); }
+  .tag.broken  { background: var(--red-bg);   color: var(--red); }
+
+  /* hover 详情（静态展示为展开态） */
+  .detail {
+    margin: 4px 0 2px 20px;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    padding: 7px 10px;
+    font-size: 11px;
+    color: var(--text2);
+  }
+  .detail .d-row { display: flex; gap: 12px; padding: 1px 0; }
+  .detail .d-k { color: var(--text3); flex-shrink: 0; width: 64px; }
+
+  .ac-foot { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--card-border);
+             display: flex; gap: 14px; font-size: 10.5px; color: var(--text3); }
+  .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<div class="page-title">锚定点栏目 — 静态 UI 稿 v0.1</div>
+<div class="page-sub">数据均为示例 · 三种日常状态：平常日 / 严重提醒日 / 普通提醒日 · 悬浮详情以展开态示意</div>
+
+<div class="grid">
+
+  <!-- ========== 变体 A：平常日 ========== -->
+  <div>
+    <div class="variant-label">A · 平常日（无当日事件，仅状态条）</div>
+    <div class="anchor-card">
+      <div class="ac-head">
+        <span class="ac-title">锚定点</span>
+        <span class="ac-question">今天市场在盯着什么做交易</span>
+        <span class="ac-time">09-25 15:32</span>
+      </div>
+
+      <div class="ac-section">
+        <div class="ac-type">价格锚</div>
+        <div style="flex:1">
+          <div class="arow">
+            <span class="icon">📌</span>
+            <span class="name">沪深300</span>
+            <span class="meta">06-18 低点 3852 起</span>
+            <span class="num up">+8.2%</span>
+            <span class="tag active">上涨段</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ac-section">
+        <div class="ac-type">事件锚</div>
+        <div style="flex:1">
+          <div class="arow">
+            <span class="icon">🌐</span>
+            <span class="name">美联储议息</span>
+            <span class="meta">10-29</span>
+            <span class="tag pending">待兑现 · 8天</span>
+            <span class="tag bear">利空</span>
+          </div>
+          <div class="arow">
+            <span class="icon">🇨🇳</span>
+            <span class="name">四季度宏观刺激预期</span>
+            <span class="meta">发酵中</span>
+            <span class="tag active">发酵中</span>
+            <span class="tag bull">利多</span>
+          </div>
+          <div class="arow">
+            <span class="icon">🌐</span>
+            <span class="name">对华关税听证</span>
+            <span class="meta">09-18</span>
+            <span class="tag done">已消化</span>
+            <span class="tag bear">利空</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ac-section">
+        <div class="ac-type">个股锚</div>
+        <div style="flex:1">
+          <div class="arow">
+            <span class="icon">⚡</span>
+            <span class="name">高度锚 · XX股份</span>
+            <span class="meta">7板</span>
+            <span class="tag active">活跃</span>
+            <span class="tag bull">涨停</span>
+          </div>
+          <div class="arow">
+            <span class="icon">🐉</span>
+            <span class="name">龙头锚 · YY科技</span>
+            <span class="meta">5板 · 45.2亿 · 半导体</span>
+            <span class="tag active">活跃</span>
+            <span class="tag bull">+6.1%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ac-foot">
+        <span><span class="legend-dot" style="background:var(--red)"></span>利多/涨</span>
+        <span><span class="legend-dot" style="background:var(--green)"></span>利空/跌</span>
+        <span><span class="legend-dot" style="background:var(--yellow)"></span>待兑现</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 变体 B：严重提醒日 ========== -->
+  <div>
+    <div class="variant-label">B · 严重提醒日（价格转折 + 空间板断板，severe 红色横幅）</div>
+    <div class="anchor-card">
+      <div class="ac-head">
+        <span class="ac-title">锚定点</span>
+        <span class="ac-question">今天市场在盯着什么做交易</span>
+        <span class="ac-time">09-25 15:32</span>
+      </div>
+
+      <div class="banner severe">
+        <span>⚠</span>
+        <div>
+          <b>大涨后首次冲高回落</b>：沪深300 自 06-18 累计 +8.2% 后，距 09-22 高点 4232 回落 -3.1%，锚点迁移至高点，转下跌段
+        </div>
+        <span class="b-time">15:30</span>
+      </div>
+      <div class="banner severe">
+        <span>⚡</span>
+        <div><b>高度锚失效</b>：XX股份（7板）今日断板 -4.8%，短线高度打开失败，与退潮共振</div>
+        <span class="b-time">15:30</span>
+      </div>
+
+      <div class="ac-section">
+        <div class="ac-type">价格锚</div>
+        <div style="flex:1">
+          <div class="arow">
+            <span class="icon">📌</span>
+            <span class="name">沪深300</span>
+            <span class="meta">09-22 高点 4232 起</span>
+            <span class="num down">-1.2%</span>
+            <span class="tag broken">下跌段</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ac-section">
+        <div class="ac-type">事件锚</div>
+        <div style="flex:1">
+          <div class="arow">
+            <span class="icon">🌐</span>
+            <span class="name">美联储议息</span>
+            <span class="meta">10-29</span>
+            <span class="tag pending">待兑现 · 8天</span>
+            <span class="tag bear">利空</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ac-section">
+        <div class="ac-type">个股锚</div>
+        <div style="flex:1">
+          <div class="arow">
+            <span class="icon">⚡</span>
+            <span class="name">高度锚 · ZZ机电</span>
+            <span class="meta">3板</span>
+            <span class="tag active">活跃</span>
+            <span class="tag bull">涨停</span>
+          </div>
+          <div class="arow">
+            <span class="icon">🐉</span>
+            <span class="name">龙头锚 · YY科技</span>
+            <span class="meta">5板 · 半导体</span>
+            <span class="tag broken">断板</span>
+            <span class="tag down" ><span class="num down">-4.8%</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 变体 C：普通提醒日 + 悬浮详情 ========== -->
+  <div>
+    <div class="variant-label">C · 普通提醒日（下杀回升 normal 蓝色横幅 + 悬浮详情展开示意）</div>
+    <div class="anchor-card">
+      <div class="ac-head">
+        <span class="ac-title">锚定点</span>
+        <span class="ac-question">今天市场在盯着什么做交易</span>
+        <span class="ac-time">09-25 15:32</span>
+      </div>
+
+      <div class="banner normal">
+        <span>↗</span>
+        <div><b>大跌后首次下杀回升</b>：沪深300 自 07-25 高点累计 -6.4% 后，距 09-24 低点 3890 反弹 +3.2%，锚点迁移至低点，转上涨段</div>
+        <span class="b-time">15:30</span>
+      </div>
+
+      <div class="ac-section">
+        <div class="ac-type">价格锚</div>
+        <div style="flex:1">
+          <div class="arow">
+            <span class="icon">📌</span>
+            <span class="name">沪深300</span>
+            <span class="meta">09-24 低点 3890 起</span>
+            <span class="num up">+3.2%</span>
+            <span class="tag active">上涨段</span>
+          </div>
+          <!-- hover 详情静态展开示意 -->
+          <div class="detail">
+            <div class="d-row"><span class="d-k">窗口高点</span><span>4232（09-22）</span></div>
+            <div class="d-row"><span class="d-k">窗口低点</span><span>3890（09-24）← 当前锚点</span></div>
+            <div class="d-row"><span class="d-k">距低点反弹</span><span>+3.2% · 距高点回撤 -8.1%</span></div>
+            <div class="d-row"><span class="d-k">上个信号</span><span>09-22 冲高回落（severe）</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ac-section">
+        <div class="ac-type">事件锚</div>
+        <div style="flex:1">
+          <div class="arow">
+            <span class="icon">🌐</span>
+            <span class="name">美联储议息</span>
+            <span class="meta">10-29 · 事件后美股 +0.4%</span>
+            <span class="tag pending">待兑现 · 8天</span>
+            <span class="tag bear">利空</span>
+          </div>
+          <div class="detail">
+            <div class="d-row"><span class="d-k">消化验证</span><span>全球事件展示事件后美股/亚太实际走势，辅助判断已消化/未消化</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ac-section">
+        <div class="ac-type">个股锚</div>
+        <div style="flex:1">
+          <div class="arow">
+            <span class="icon">⚡</span>
+            <span class="name">高度锚 · XX股份</span>
+            <span class="meta">7板</span>
+            <span class="tag active">晋级</span>
+            <span class="tag bull">涨停</span>
+          </div>
+          <div class="arow">
+            <span class="icon">🐉</span>
+            <span class="name">龙头锚 · YY科技</span>
+            <span class="meta">5板 · 半导体</span>
+            <span class="tag active">活跃</span>
+            <span class="num down">-5.5%</span>
+          </div>
+          <div class="banner normal" style="margin:6px 0 0">
+            <span>🐉</span>
+            <div><b>龙头大跌</b>：YY科技 -5.5%，赚钱效应受损（normal）</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="variant-label">页面位置示意：情绪演化区上方，全宽卡片（占位灰块为现有区块）</div>
+<div style="max-width:1280px">
+  <div style="height:34px; background:#e3e9f2; border-radius:6px; margin-bottom:8px; display:flex; align-items:center; justify-content:center; color:#8896aa; font-size:11px;">双温度卡片</div>
+  <div class="anchor-card" style="margin-bottom:8px">
+    <div class="ac-head"><span class="ac-title">锚定点</span><span class="ac-question">今天市场在盯着什么做交易</span><span class="ac-time">09-25 15:32</span></div>
+    <div class="ac-section">
+      <div class="ac-type">价格锚</div>
+      <div style="flex:1"><div class="arow"><span class="icon">📌</span><span class="name">沪深300</span><span class="meta">06-18 低点 3852 起</span><span class="num up">+8.2%</span><span class="tag active">上涨段</span></div></div>
+    </div>
+    <div class="ac-section">
+      <div class="ac-type">事件锚</div>
+      <div style="flex:1">
+        <div class="arow"><span class="icon">🌐</span><span class="name">美联储议息</span><span class="meta">10-29</span><span class="tag pending">待兑现 · 8天</span><span class="tag bear">利空</span></div>
+        <div class="arow"><span class="icon">🇨🇳</span><span class="name">四季度宏观刺激预期</span><span class="meta">发酵中</span><span class="tag active">发酵中</span><span class="tag bull">利多</span></div>
+      </div>
+    </div>
+    <div class="ac-section">
+      <div class="ac-type">个股锚</div>
+      <div style="flex:1">
+        <div class="arow"><span class="icon">⚡</span><span class="name">高度锚 · XX股份</span><span class="meta">7板</span><span class="tag active">活跃</span><span class="tag bull">涨停</span></div>
+        <div class="arow"><span class="icon">🐉</span><span class="name">龙头锚 · YY科技</span><span class="meta">5板 · 45.2亿 · 半导体</span><span class="tag active">活跃</span><span class="tag bull">+6.1%</span></div>
+      </div>
+    </div>
+  </div>
+  <div style="height:34px; background:#e3e9f2; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#8896aa; font-size:11px;">情绪演化区（双温度折线 + 今日面板）</div>
+</div>
+
+</body>
+</html>

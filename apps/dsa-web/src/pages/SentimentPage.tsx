@@ -14,6 +14,7 @@ import {
   type LadderTodayResponse,
   type FocusResponse,
   type FocusScope,
+  type FocusEventItem,
   type TomorrowFocus,
   type LimitUpPoolItem,
   type PoolType,
@@ -42,6 +43,14 @@ function fmtDay(d: string): string {
   const md = d.slice(5)
   const [m, day] = md.split('-')
   return `${parseInt(m, 10)}月${parseInt(day, 10)}日`
+}
+
+const WEEKDAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+
+function fmtWeekday(d: string): string {
+  // '2026-09-25' → '周五'（无效日期返回空串）
+  const t = new Date(`${d}T00:00:00`)
+  return Number.isNaN(t.getTime()) ? '' : WEEKDAY_NAMES[t.getDay()]
 }
 
 // 仪表 5 档标签（对齐 ui-mockup：冰点/低迷/中性/活跃/过热 · 空头/弱势/中性/强势/过热）
@@ -85,21 +94,21 @@ const _COLD_EXTREME: StageStyle = {
 }
 const _COLD_MID: StageStyle = {
   tempCls: 'text-green-400',
-  pillCls: 'bg-green-400/10 text-green-400 ring-green-400/20',
+  pillCls: 'bg-green-400/15 text-green-400 ring-green-400/40',
   textCls: 'text-green-400',
   tipCls: 'bg-green-400/8 border-green-400/20',
   markerColor: '#68d391',
 }
 const _NEUTRAL: StageStyle = {
   tempCls: 'text-amber-400',
-  pillCls: 'bg-amber-400/10 text-amber-400 ring-amber-400/20',
+  pillCls: 'bg-amber-400/15 text-amber-400 ring-amber-400/40',
   textCls: 'text-amber-400',
   tipCls: 'bg-amber-400/10 border-amber-400/25',
   markerColor: '#ecc94b',
 }
 const _HOT_MID: StageStyle = {
   tempCls: 'text-orange-400',
-  pillCls: 'bg-orange-400/10 text-orange-400 ring-orange-400/20',
+  pillCls: 'bg-orange-400/15 text-orange-400 ring-orange-400/40',
   textCls: 'text-orange-400',
   tipCls: 'bg-orange-400/10 border-orange-400/25',
   markerColor: '#ed8936',
@@ -174,7 +183,7 @@ function OverseasCard({ overseas }: { overseas: SentimentOverseas | null }) {
       {overseas && (hasUs || hasKr) ? (
         <div className="space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10.5px] text-secondary-text w-16 shrink-0">美股昨夜</span>
+            <span className="text-[11px] text-secondary-text w-16 shrink-0">美股昨夜</span>
             <ChgChip label="标普500" v={overseas.spx_chg} />
             <ChgChip label="纳斯达克" v={overseas.ndx_chg} />
             <ChgChip label="道琼斯" v={overseas.dji_chg} />
@@ -185,13 +194,69 @@ function OverseasCard({ overseas }: { overseas: SentimentOverseas | null }) {
             )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10.5px] text-secondary-text w-16 shrink-0">韩股盘中</span>
+            <span className="text-[11px] text-secondary-text w-16 shrink-0">韩股盘中</span>
             <ChgChip label="KOSPI" v={overseas.kospi_chg} />
             <ChgChip label="KOSDAQ" v={overseas.kosdaq_chg} />
           </div>
         </div>
       ) : (
         <EmptyHint text="外盘摘要待收盘采集后更新" />
+      )}
+    </div>
+  )
+}
+
+// ─── 指数行情卡（盘中实时 / 收盘快照） ───────────────────────────
+
+interface IndexQuoteRow {
+  name: string
+  close: number | null
+  chgPct: number | null
+}
+
+function IndexQuotesCard({ overview }: { overview: SentimentOverview | null }) {
+  if (!overview) return null
+  const rtIndices = overview.realtime?.indices ?? []
+  const live = rtIndices.length > 0
+  // 旧后端响应可能缺少 sh_close/sh_chg_pct 等字段（undefined），统一归一为 null
+  const rows: IndexQuoteRow[] = live
+    ? rtIndices.map((idx) => ({
+        name: idx.name ?? idx.code ?? '—',
+        close: idx.current ?? null,
+        chgPct: idx.change_pct ?? null,
+      }))
+    : [
+        { name: '上证指数', close: overview.indices.sh_close ?? null, chgPct: overview.indices.sh_chg_pct ?? null },
+        { name: '沪深300', close: overview.indices.hs300_close ?? null, chgPct: overview.indices.hs300_chg_pct ?? null },
+        { name: '上证50', close: null, chgPct: overview.indices.sh50_chg_pct ?? null },
+        { name: '创业板指', close: null, chgPct: overview.indices.chinext_chg_pct ?? null },
+      ]
+  const hasData = rows.some((r) => r.chgPct !== null || r.close !== null)
+  return (
+    <div className="rounded-xl border border-border/50 bg-card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs font-semibold text-secondary-text uppercase tracking-wide">指数行情</div>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 text-secondary-text">
+          {live ? '实时' : '收盘'}
+        </span>
+      </div>
+      {hasData ? (
+        <div className="flex flex-wrap gap-2">
+          {rows.map((r) => (
+            <span key={r.name} className={cn(
+              'text-[11.5px] px-2 py-0.5 rounded tabular-nums font-medium inline-flex items-center gap-1.5',
+              r.chgPct === null
+                ? 'bg-muted/60 text-secondary-text'
+                : r.chgPct >= 0 ? 'bg-red-400/10 text-red-400' : 'bg-green-400/10 text-green-400',
+            )}>
+              <span>{r.name}</span>
+              <span>{r.close != null ? r.close.toFixed(2) : '—'}</span>
+              <span>{fmtPct(r.chgPct, 2)}</span>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <EmptyHint text="指数行情待采集" />
       )}
     </div>
   )
@@ -209,7 +274,8 @@ function DualLineChart({ shortTemps, trendTemps }: {
   trendTemps: (number | null)[]
 }) {
   const n = shortTemps.length
-  const xOf = (i: number) => (n <= 1 ? AXIS_W - 20 : 20 + (i * (AXIS_W - 40)) / (n - 1))
+  // 与日期行/量能柱对齐：每个交易日占 1/n 槽位，数据点居中
+  const xOf = (i: number) => (n === 0 ? AXIS_W / 2 : ((i + 0.5) / n) * AXIS_W)
   const yOf = (v: number) => AXIS_Y_BOTTOM - (v / 100) * (AXIS_Y_BOTTOM - AXIS_Y_TOP)
 
   const series = (arr: (number | null)[], color: string) => {
@@ -279,7 +345,7 @@ function VolStrip({ vols }: { vols: (number | null)[] }) {
               className="flex-1 relative rounded-t-[3px]"
               style={{ height: `${Math.max((v / max) * 100, 10)}%`, background: bg, minWidth: 0 }}
             >
-              <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9.5px] text-secondary-text whitespace-nowrap tabular-nums">
+              <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[11px] text-secondary-text whitespace-nowrap tabular-nums">
                 {(v / 10000).toFixed(2)}
               </span>
             </div>
@@ -365,7 +431,7 @@ function MainAxis({ overview, trend }: { overview: SentimentOverview | null; tre
             <span className="text-[11px] font-medium text-secondary-text">较昨日 <DeltaVal v={vsPrev} suffix="%" /></span>
             {volTag && (
               <span className={cn(
-                'text-[10.5px] font-semibold px-1.5 py-px rounded',
+                'text-[11px] font-semibold px-1.5 py-px rounded',
                 volTag === '放量' ? 'bg-red-400/10 text-red-400' : volTag === '缩量' ? 'bg-green-400/10 text-green-400' : 'bg-muted/60 text-secondary-text',
               )}>
                 {volTag}
@@ -384,20 +450,20 @@ function MainAxis({ overview, trend }: { overview: SentimentOverview | null; tre
           <i className="inline-block w-2.5 h-[3px] rounded-sm" style={{ background: TREND_COLOR }} />趋势情绪
         </span>
         {n > 0 && (
-          <span className="ml-auto text-[10.5px]">{days[0]} → {days[n - 1]} · 今日高亮</span>
+          <span className="ml-auto text-[11px]">{days[0]} → {days[n - 1]} · 今日高亮</span>
         )}
       </div>
 
       <DualLineChart shortTemps={shortTemps} trendTemps={trendTemps} />
 
-      {/* 日期轴 */}
+      {/* 日期轴（与量能柱槽位对齐，每日居中） */}
       {n > 0 && (
-        <div className="flex justify-between mt-1">
+        <div className="flex mt-1">
           {days.map((d, i) => (
             <span
               key={i}
               className={cn(
-                'text-[9px] tabular-nums',
+                'flex-1 text-center text-[11px] tabular-nums',
                 i === n - 1 ? 'font-bold text-foreground' : 'text-secondary-text',
               )}
             >
@@ -434,7 +500,7 @@ function MainAxis({ overview, trend }: { overview: SentimentOverview | null; tre
 
       {/* 动态过程 */}
       <div className="rounded-lg bg-muted/40 border border-border/40 px-3 py-2.5 mt-3">
-        <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide mb-1.5">🧭 动态过程</div>
+        <div className="text-[11px] font-semibold text-secondary-text uppercase tracking-wide mb-1.5">🧭 动态过程</div>
         {processText ? (
           <p className="text-xs text-foreground/90 leading-relaxed">{processText}</p>
         ) : (
@@ -502,7 +568,7 @@ function SentimentCard({ icon, name, temp, stageLabel, style, fallbackColor, adv
           style={{ left: `${Math.min(100, Math.max(0, temp ?? 0))}%`, border: `3px solid ${style?.markerColor ?? fallbackColor}` }}
         />
       </div>
-      <div className="flex justify-between mt-1.5 text-[10.5px] text-secondary-text">
+      <div className="flex justify-between mt-1.5 text-[11px] text-secondary-text">
         {gaugeLabels.map((l) => <span key={l}>{l}</span>)}
       </div>
       {/* 指标明细（含演变轨迹） */}
@@ -512,7 +578,7 @@ function SentimentCard({ icon, name, temp, stageLabel, style, fallbackColor, adv
             <span className="text-secondary-text">{m.label}</span>
             <span className="font-semibold text-foreground tabular-nums">
               <span className={m.valueCls}>{m.value}</span>
-              {m.traj && <span className="ml-1.5 text-[10.5px] text-secondary-text font-normal tabular-nums">{m.traj}</span>}
+              {m.traj && <span className="ml-1.5 text-[11px] text-secondary-text font-normal tabular-nums">{m.traj}</span>}
             </span>
           </div>
         ))}
@@ -552,6 +618,10 @@ function DualDimension({ overview, trend, ladderTrend }: {
   const stStyle = st !== null ? SHORT_STAGE_STYLES[stStage] ?? null : null
   const trStyle = tr !== null ? TREND_STAGE_STYLES[trStage] ?? null : null
 
+  // 上证指数涨跌幅：盘中取实时行，盘后回落快照字段
+  const shChg = overview?.realtime?.indices?.find((i) => i.name === '上证指数')
+    ?.change_pct ?? overview?.indices.sh_chg_pct ?? null
+
   const SHORT_METRICS: MetricRow[] = [
     {
       label: '空间高度',
@@ -583,9 +653,11 @@ function DualDimension({ overview, trend, ladderTrend }: {
 
   const TREND_METRICS: MetricRow[] = [
     {
-      // 占位：快照暂无上证指数字段，后续采集补 sh_chg_pct 后自动生效
       label: '上证指数',
-      value: '—',
+      value: shChg !== null ? fmtPct(shChg, 2) : '—',
+      valueCls: shChg !== null
+        ? shChg >= 0 ? 'text-red-400' : 'text-green-400'
+        : undefined,
     },
     {
       label: '涨跌家数',
@@ -739,14 +811,14 @@ function LimitFocus({ ladderUp, ladderDown, ladderTrend, overview, onPoolFirstOp
         <div className="flex gap-1 ml-auto">
           {(['height', 'sector'] as const).map((m) => (
             <button key={m} onClick={() => { setGroupMode(m); setSelectedGroup(null) }}
-              className={cn('text-[10.5px] px-2.5 py-1 rounded-md border transition-colors',
+              className={cn('text-[11px] px-2.5 py-1 rounded-md border transition-colors',
                 groupMode === m ? 'bg-[hsl(var(--primary))/15] border-[hsl(var(--primary))/30] text-[hsl(var(--primary))] font-semibold' : 'border-border/40 text-secondary-text hover:border-border')}>
               {m === 'height' ? (isDown ? '按连续跌停天数' : '按高度分组') : '按板块分类'}
             </button>
           ))}
         </div>
         {data?.pool_source && data.pool_source !== 'snapshot' && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 text-secondary-text">
+          <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted/60 text-secondary-text">
             {data.pool_source === 'realtime' ? '实时数据' : '最近交易日'}
           </span>
         )}
@@ -779,7 +851,7 @@ function LimitFocus({ ladderUp, ladderDown, ladderTrend, overview, onPoolFirstOp
                   <div key={s.code}
                     className="group flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-border/40 bg-card hover:bg-muted/30 transition-colors flex-wrap">
                     {!isDown && isLeader(s) && <span className="text-[12px] leading-none" title="空间板">👑</span>}
-                    <span className={cn('text-[10.5px] font-bold px-1.5 py-0.5 rounded shrink-0',
+                    <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded shrink-0',
                       isDown ? 'bg-green-400/15 text-green-400'
                         : board >= 3 ? 'bg-red-400/15 text-red-400'
                           : board === 2 ? 'bg-amber-400/15 text-amber-400'
@@ -789,13 +861,13 @@ function LimitFocus({ ladderUp, ladderDown, ladderTrend, overview, onPoolFirstOp
                     <span className="text-[12.5px] font-bold text-foreground tabular-nums whitespace-nowrap">{s.code}</span>
                     <span className="text-[12.5px] font-semibold text-foreground whitespace-nowrap">{s.name}</span>
                     {s.industry && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-400/10 text-blue-400 whitespace-nowrap">{s.industry}</span>
+                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-blue-400/10 text-blue-400 whitespace-nowrap">{s.industry}</span>
                     )}
                     <span className={cn('text-[12px] font-bold tabular-nums whitespace-nowrap',
                       (s.change_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400')}>
                       {s.change_pct !== null ? `${s.change_pct > 0 ? '+' : ''}${s.change_pct.toFixed(2)}%` : '—'}
                     </span>
-                    <div className="flex items-center gap-2.5 text-[10.5px] text-secondary-text whitespace-nowrap ml-auto">
+                    <div className="flex items-center gap-2.5 text-[11px] text-secondary-text whitespace-nowrap ml-auto">
                       {s.seal_amount !== null && (
                         <span>封单 <span className="text-foreground font-semibold tabular-nums">{(s.seal_amount / 1e8).toFixed(2)}亿</span></span>
                       )}
@@ -832,6 +904,90 @@ function LimitFocus({ ladderUp, ladderDown, ladderTrend, overview, onPoolFirstOp
 
 // ─── 市场聚焦演化 ─────────────────────────────────────────────────
 
+const FOCUS_TABS = [
+  { key: 'event' as const, label: '🔥 事件' },
+  { key: 'sector' as const, label: '📊 板块' },
+  { key: 'stock'  as const, label: '⭐ 个股' },
+]
+
+function LookbackNote({ text }: { text: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-amber-400/40 bg-amber-400/10 px-3 py-2 text-[11.5px] text-amber-500 leading-relaxed">
+      {text}
+    </div>
+  )
+}
+
+// 影响级 chip：全页扫读锚点，11px/600 + ring 描边，与 meta chip 视觉分层
+function impactChipCls(label: string | null): string {
+  if (label === '重点关注') return 'bg-red-400/10 text-red-400 ring-1 ring-red-400/30'
+  if (label === '全球关注') return 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] ring-1 ring-[hsl(var(--primary))]/30'
+  if (label === '延续关注') return 'bg-slate-400/10 text-slate-400'
+  return 'bg-muted/60 text-secondary-text'
+}
+
+// 榜单序号方块（第一名红底）
+function RankBadge({ rank }: { rank: number }) {
+  return (
+    <span className={cn('w-6 h-6 rounded-md flex items-center justify-center text-[12px] font-bold shrink-0',
+      rank === 1 ? 'bg-red-400/10 text-red-400' : 'bg-muted text-secondary-text')}>
+      {rank}
+    </span>
+  )
+}
+
+// ── 事件时间与地区工具 ──
+// 财经日历时间均为北京时间；非中国区事件附当地换算（浏览器 Intl，含夏令时）
+
+const REGION_TZ: Record<string, { tz: string; label: string }> = {
+  美国: { tz: 'America/New_York', label: '美东' },
+  加拿大: { tz: 'America/Toronto', label: '美东' },
+  英国: { tz: 'Europe/London', label: '伦敦' },
+  欧元区: { tz: 'Europe/Berlin', label: '欧中' },
+  德国: { tz: 'Europe/Berlin', label: '柏林' },
+  法国: { tz: 'Europe/Berlin', label: '巴黎' },
+  瑞士: { tz: 'Europe/Zurich', label: '苏黎世' },
+  日本: { tz: 'Asia/Tokyo', label: '东京' },
+  韩国: { tz: 'Asia/Seoul', label: '首尔' },
+  澳大利亚: { tz: 'Australia/Sydney', label: '悉尼' },
+  新西兰: { tz: 'Pacific/Auckland', label: '奥克兰' },
+  印度: { tz: 'Asia/Kolkata', label: '新德里' },
+  新加坡: { tz: 'Asia/Singapore', label: '新加坡' },
+}
+
+function regionOf(title: string): string | null {
+  return title.match(/^\[([^\]]+)\]/)?.[1] ?? null
+}
+
+// 'HH:MM'（北京时间）→ 展示标签：外国事件 "20:30 北京（美东 08:30）"，中国事件原样
+function eventTimeLabel(date: string, time: string | null | undefined, region: string | null): string | null {
+  const m = (time || '').match(/^(\d{1,2}:\d{2})/)
+  if (!m) return null
+  const entry = region ? REGION_TZ[region] : undefined
+  if (!entry) return m[1]
+  try {
+    const dt = new Date(`${date}T${m[1]}:00+08:00`)
+    if (Number.isNaN(dt.getTime())) return m[1]
+    const loc = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: entry.tz, hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(dt)
+    return `${m[1]} 北京（${entry.label} ${loc}）`
+  } catch {
+    return m[1]
+  }
+}
+
+function todayISO(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function addDaysISO(base: string, n: number): string {
+  const d = new Date(`${base}T00:00:00`)
+  d.setDate(d.getDate() + n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function MarketFocus({ tomorrow, focusWeek, focusMonth, onScopeFirstOpen }: {
   tomorrow: TomorrowFocus | null
   focusWeek: FocusResponse | null
@@ -839,7 +995,8 @@ function MarketFocus({ tomorrow, focusWeek, focusMonth, onScopeFirstOpen }: {
   onScopeFirstOpen: (scope: FocusScope) => void
 }) {
   const [scope, setScope] = useState<'tomorrow' | 'week' | 'month'>('tomorrow')
-  const [focusTab, setFocusTab] = useState<'event' | 'stock' | 'sector'>('stock')
+  const [focusTab, setFocusTab] = useState<'event' | 'stock' | 'sector'>('event')
+  const [weekDay, setWeekDay] = useState<string | null>(null)  // 选中的日期，null = 全部 7 天
   const navigate = useNavigate()
 
   const SCOPE_TABS = [
@@ -853,15 +1010,84 @@ function MarketFocus({ tomorrow, focusWeek, focusMonth, onScopeFirstOpen }: {
       : status === 'fade_risk' ? 'bg-slate-400/10 text-slate-400 border border-slate-400/25'
         : 'bg-blue-400/10 text-blue-400 border border-blue-400/25'
 
+  // 周期聚焦事件卡（前瞻 + 回顾共用）：日历行摘要含 "HH:MM ｜ 预期 x ｜ 前值 y"，
+  // 时间前缀拆出为 chip；快讯行保留写入预期入口
+  const renderEventCard = (e: FocusEventItem, idx: number, showDate = false) => {
+    const timeMatch = e.summary?.match(/^(\d{1,2}:\d{2})\s*｜\s*(.*)$/)
+    const time = timeMatch?.[1]
+    const desc = timeMatch ? timeMatch[2] : (e.summary || '')
+    const isCalendar = e.event_type === 'calendar'
+    const isKey = e.impact_label === '重点关注'
+    return (
+      <div key={`${e.event_date}-${idx}`} className={cn('rounded-lg border p-3 space-y-1',
+        isKey ? 'bg-red-400/[0.08] border-red-400/40 border-l-[3px] border-l-red-400'
+          : e.impact_label === '延续关注' ? 'bg-muted/30 border-border/40'
+            : e.sentiment === 'positive' ? 'bg-green-400/10 border-green-400/25'
+              : e.sentiment === 'negative' ? 'bg-red-400/10 border-red-400/25'
+                : 'bg-card border-border/40')}>
+        <div className="flex items-center gap-2 flex-wrap">
+          {(showDate || time) && (
+            <span className="text-[11px] text-secondary-text tabular-nums">
+              {[showDate ? `${e.event_date.slice(5)} ${fmtWeekday(e.event_date)}` : null,
+                eventTimeLabel(e.event_date, time, regionOf(e.title)) ?? time].filter(Boolean).join(' · ')}
+            </span>
+          )}
+          {e.impact_label && (
+            <span className={cn('text-[11px] font-semibold px-2 py-0.5 rounded-md', impactChipCls(e.impact_label))}>
+              {isKey ? '⭐ ' : ''}{e.impact_label}
+            </span>
+          )}
+          {e.event_type && !isCalendar && (
+            <span className="text-[11px] px-2 py-0.5 rounded-md bg-muted/60 text-secondary-text">{e.event_type}</span>
+          )}
+          {e.related_sectors.map((s) => <span key={s} className="text-[11px] px-2 py-0.5 rounded-md bg-blue-400/10 text-blue-400">{s}</span>)}
+        </div>
+        <p className="text-[13px] text-foreground font-semibold leading-snug">{e.title}</p>
+        {desc && <p className="text-[11.5px] text-secondary-text leading-relaxed tabular-nums">{desc}</p>}
+        {!isCalendar && (
+          <div className="flex justify-end">
+            <button onClick={() => navigate('/expectations/new')} className="flex items-center gap-1 text-[11px] text-[hsl(var(--primary))] border border-[hsl(var(--primary))/30] px-2 py-0.5 rounded hover:bg-[hsl(var(--primary))/8] transition-colors">
+              <Plus className="w-3 h-3" />写入预期
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // 前瞻事件按日期分组（后端按日期升序返回）
+  const groupEventsByDate = (events: FocusEventItem[]) => {
+    const groups: { date: string; items: FocusEventItem[] }[] = []
+    for (const e of events) {
+      const last = groups[groups.length - 1]
+      if (last && last.date === e.event_date) last.items.push(e)
+      else groups.push({ date: e.event_date, items: [e] })
+    }
+    return groups
+  }
+
+  // 内层分段控件：与外层 scope 同规格、占满整行
+  const renderTabRow = (
+    <div className="flex gap-1 p-1 rounded-lg bg-muted/70">
+      {FOCUS_TABS.map(({ key, label }) => (
+        <button key={key} onClick={() => setFocusTab(key)}
+          className={cn('flex-1 text-center py-2 px-3 rounded-md text-[13px] font-medium transition-all',
+            focusTab === key ? 'bg-card text-foreground font-semibold shadow-sm' : 'text-secondary-text hover:text-foreground')}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+
   return (
     <div className="space-y-4">
 
       {/* ── 顶部 scope tab ── */}
-      <div className="flex gap-1 p-1 rounded-lg bg-muted/60">
+      <div className="flex gap-1 p-1 rounded-lg bg-muted/70">
         {SCOPE_TABS.map(({ key, label }) => (
           <button key={key} onClick={() => { setScope(key); if (key !== 'tomorrow') onScopeFirstOpen(key) }}
             className={cn(
-              'flex-1 text-center py-1.5 px-3 rounded-md text-xs font-medium transition-all',
+              'flex-1 text-center py-2 px-3 rounded-md text-[13px] font-medium transition-all',
               scope === key
                 ? 'bg-card text-foreground font-semibold shadow-sm'
                 : 'text-secondary-text hover:text-foreground',
@@ -873,178 +1099,273 @@ function MarketFocus({ tomorrow, focusWeek, focusMonth, onScopeFirstOpen }: {
 
       {/* ── ① 明日重点聚焦 ── */}
       {scope === 'tomorrow' && <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="text-base">🎯</span>
-          <span className="text-sm font-semibold text-foreground">明日重点聚焦</span>
-          {tomorrow && <span className="text-[10.5px] text-secondary-text ml-1">{fmtDay(tomorrow.for_date)}</span>}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[15px] font-bold text-foreground">🎯 明日重点聚焦</span>
+          {tomorrow && <span className="text-[12px] text-secondary-text tabular-nums">{fmtDay(tomorrow.for_date)} {fmtWeekday(tomorrow.for_date)}</span>}
+          <span className="text-[11px] px-2 py-px rounded bg-muted/70 text-secondary-text">每日收盘采集后生成</span>
         </div>
         {!tomorrow ? (
           <EmptyHint text="待生成，预计收盘后更新" />
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-2">
-                <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide">关键事件</div>
+            {renderTabRow}
+
+            {focusTab === 'event' && (
+              <div className="space-y-1.5">
                 {tomorrow.key_events.length === 0 ? (
-                  <div className="text-xs text-secondary-text">暂无事件数据</div>
-                ) : (
-                  <ul className="space-y-1 text-xs text-foreground/80">
-                    {tomorrow.key_events.map((e, i) => (
-                      <li key={i}>· {e.code ? `${e.code} ` : ''}{e.title}{e.time ? `（${e.time}）` : ''}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-2">
-                <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide">关注板块</div>
-                {tomorrow.sector_watch.length === 0 ? (
-                  <div className="text-xs text-secondary-text">暂无板块数据</div>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {tomorrow.sector_watch.map((s) => (
-                      <span key={s.name} className={cn('text-[10.5px] px-2 py-1 rounded-md', statusStyle(s.status))}>
-                        {s.name}（{s.reason}）
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            {tomorrow.stock_watch.length > 0 && (
-              <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-1.5">
-                <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide">关注个股</div>
-                {tomorrow.stock_watch.map((s) => (
-                  <div key={s.code} className="flex items-center gap-2 text-xs">
-                    <span className="font-semibold text-foreground">{s.code} {s.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[hsl(var(--primary))/10] text-[hsl(var(--primary))]">{s.label}</span>
-                    {s.concept && <span className="text-[10px] text-secondary-text">{s.concept}</span>}
-                  </div>
-                ))}
+                  <EmptyHint text="明日无重点财经事件（日历未生成或当日无重要数据发布）" />
+                ) : tomorrow.key_events.map((e, i) => {
+                  const isKey = e.sentiment === 'key'
+                  return (
+                    <div key={i} className={cn('rounded-lg border px-3 py-2.5 space-y-1',
+                      isKey ? 'bg-red-400/[0.08] border-red-400/40 border-l-[3px] border-l-red-400' : 'bg-card border-border/40')}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {e.time && (
+                          <span className="text-[12px] font-bold text-[hsl(var(--primary))] tabular-nums shrink-0">
+                            {eventTimeLabel(tomorrow.for_date, e.time, e.code ?? regionOf(e.title)) ?? e.time}
+                          </span>
+                        )}
+                        {e.code && <span className="text-[11px] px-2 py-0.5 rounded-md bg-blue-400/10 text-blue-400 shrink-0">{e.code}</span>}
+                        {isKey && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-red-400/10 text-red-400 ring-1 ring-red-400/30 shrink-0">⭐ 重点关注</span>}
+                      </div>
+                      <p className="text-[13px] text-foreground font-semibold leading-snug">{e.title}</p>
+                      {e.impact && <p className="text-[11.5px] text-secondary-text tabular-nums">{e.impact}</p>}
+                    </div>
+                  )
+                })}
               </div>
             )}
-            <div className="rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2.5">
-              <div className="text-[10.5px] font-semibold text-amber-500 mb-1">🧭 AI 前瞻</div>
-              <p className="text-xs text-foreground/80 leading-relaxed">{tomorrow.ai_preview || '待生成'}</p>
+
+            {focusTab === 'sector' && (
+              <div className="space-y-2">
+                <LookbackNote text="🧭 明日板块无法预知，以下为今日发酵回溯：涨停聚集 = 延续发酵，冷清 = 退潮风险" />
+                {tomorrow.sector_watch.length === 0 ? (
+                  <EmptyHint text="暂无板块数据" />
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {tomorrow.sector_watch.map((s, i) => (
+                      <div key={s.name} className={cn('flex items-center gap-2.5 rounded-lg border px-3 py-2.5 bg-card',
+                        i === 0 ? 'border-red-400/40 bg-red-400/[0.06]' : 'border-border/40')}>
+                        <RankBadge rank={i + 1} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[13px] font-bold text-foreground">{s.name}</div>
+                          <div className="text-[11px] text-secondary-text truncate">{s.reason}</div>
+                        </div>
+                        <span className={cn('text-[11px] font-semibold px-2 py-0.5 rounded-md shrink-0', statusStyle(s.status))}>
+                          {s.status === 'continue' ? '延续发酵' : s.status === 'fade_risk' ? '退潮风险' : '转强观察'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {focusTab === 'stock' && (
+              <div className="space-y-2">
+                <LookbackNote text="🧭 以下为今日涨停梯队回溯：按连板高度排列，关注晋级与断板" />
+                {tomorrow.stock_watch.length === 0 ? (
+                  <EmptyHint text="今日无连板梯队" />
+                ) : (
+                  <div className="space-y-1.5">
+                    {tomorrow.stock_watch.map((s, i) => (
+                      <div key={s.code} className={cn('rounded-lg border px-3 py-2.5 bg-card space-y-1',
+                        i === 0 ? 'border-red-400/40 bg-red-400/[0.06]' : 'border-border/40')}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[13px] font-bold text-foreground tabular-nums">{s.code}</span>
+                          <span className="text-[13px] font-semibold text-foreground">{s.name}</span>
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-orange-400/10 text-orange-400 border border-orange-400/25 shrink-0">{s.label}</span>
+                          {s.concept && <span className="text-[11px] px-2 py-0.5 rounded-md bg-blue-400/10 text-blue-400">{s.concept}</span>}
+                        </div>
+                        {s.reason && <p className="text-[11.5px] text-secondary-text">{s.reason}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2.5">
+              <div className="text-[11.5px] font-bold text-amber-500 mb-1">🧭 AI 前瞻</div>
+              <p className="text-[12.5px] text-foreground/80 leading-relaxed">{tomorrow.ai_preview || '待生成'}</p>
             </div>
           </>
         )}
       </div>}
 
       {/* ── ② / ③ 周聚焦 / 月聚焦 ── */}
-      {(scope === 'week' || scope === 'month') && <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-base">{scope === 'week' ? '📅' : '🌙'}</span>
-          <span className="text-sm font-semibold text-foreground">{scope === 'week' ? '周聚焦' : '月聚焦'}</span>
-        </div>
+      {(scope === 'week' || scope === 'month') && (() => {
+        const data = scope === 'week' ? focusWeek : focusMonth
+        const isWeek = scope === 'week'
+        const reviewLabel = isWeek ? '近 7 天回顾' : '上月回顾'
+        const lookbackNote = isWeek
+          ? '🧭 未来无板块/个股数据，以下回溯近 7 天：区间涨幅榜 + 最高连板空间榜'
+          : '🧭 未来无板块/个股数据，以下回溯上月：整月涨幅最大板块 + 最高连板个股'
+        const events = data?.events ?? []
+        const keyCount = events.filter((e) => e.impact_label === '重点关注').length
+        // 周聚焦 = 未来 7 天滚动窗口：逐日渲染（无日程的日子也罗列），星期导航锚点跳转
+        const weekDays = isWeek ? Array.from({ length: 7 }, (_, i) => addDaysISO(todayISO(), i)) : []
+        const byDate = new Map(groupEventsByDate(events).map((g) => [g.date, g.items]))
+        return (
+          <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[15px] font-bold text-foreground">{isWeek ? '📅 周聚焦' : '🌙 月聚焦'}</span>
+              <span className="text-[11px] px-2 py-px rounded bg-muted/70 text-secondary-text">
+                {isWeek ? '未来 7 天滚动 · 每日采集刷新' : '本月首个采集日生成 · 整月固定'}
+              </span>
+            </div>
 
-        {/* 内容 Tab（月聚焦暂只保留板块主线） */}
-        {scope === 'week' && (
-          <div className="flex gap-1">
-            {([['event', '🔥 热点事件'], ['stock', '⭐ 焦点个股'], ['sector', '📊 热点板块']] as const).map(([k, label]) => (
-              <button key={k} onClick={() => setFocusTab(k)}
-                className={cn('text-[10.5px] px-3 py-1 rounded-md border transition-colors',
-                  focusTab === k ? 'bg-muted border-border text-foreground font-semibold' : 'border-border/30 text-secondary-text hover:border-border')}>
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {scope === 'month' && (
-          <div className="space-y-2">
-            {(focusMonth?.sectors ?? []).length === 0 ? (
-              <EmptyHint text="月度汇总数据采集中（周末生成）" />
-            ) : focusMonth!.sectors.map((sec) => (
-              <div key={sec.sector_name} className="flex items-center gap-3 rounded-lg border border-border/40 px-3 py-2.5 text-xs">
-                <span className="font-semibold text-foreground w-20 shrink-0">{sec.sector_name}</span>
-                <span className={cn('font-bold', (sec.chg_pct ?? 0) >= 0 ? 'text-green-400' : 'text-red-400')}>{fmtPct(sec.chg_pct)}</span>
-                {sec.leader_code && <span className="text-secondary-text">龙头 {sec.leader_code} {sec.leader_name}</span>}
-                {sec.lifecycle_stage && <span className="ml-auto text-[10.5px] text-secondary-text">{sec.lifecycle_stage}</span>}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {scope === 'week' && focusTab === 'event' && (
-          <div className="space-y-2">
-            {(focusWeek?.events ?? []).length === 0 ? (
-              <EmptyHint text="热点事件数据采集中" />
-            ) : focusWeek!.events.map((e, i) => (
-              <div key={i} className={cn('rounded-xl border p-3 space-y-2',
-                e.sentiment === 'positive' ? 'bg-green-400/10 border-green-400/25'
-                  : e.sentiment === 'negative' ? 'bg-red-400/10 border-red-400/25'
-                    : 'bg-muted/40 border-border/40')}>
-                <div className="flex items-start gap-2">
-                  <span className={cn('text-[10.5px] font-bold shrink-0',
-                    e.sentiment === 'positive' ? 'text-green-400' : e.sentiment === 'negative' ? 'text-red-400' : 'text-secondary-text')}>
-                    {e.sentiment === 'positive' ? '🔴 利好' : e.sentiment === 'negative' ? '🟢 利空' : '⚪ 中性'}
+            {events.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                <span className="text-[11px] px-2.5 py-1 rounded-full bg-muted/70 text-secondary-text">
+                  {isWeek ? '未来 7 天' : '本月'}前瞻 <b className="text-foreground ml-0.5">{events.length}</b>
+                </span>
+                {keyCount > 0 && (
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-red-400/10 text-red-400">
+                    ⭐ 重点关注 <b className="ml-0.5">{keyCount}</b>
                   </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-[10px] text-secondary-text">{e.event_date}</span>
-                      {e.event_type && <span className="text-[10px] px-1.5 py-px rounded bg-muted/60 text-secondary-text">{e.event_type}</span>}
-                      {e.related_sectors.map((s) => <span key={s} className="text-[10px] px-1.5 py-px rounded bg-blue-400/10 text-blue-400">{s}</span>)}
+                )}
+              </div>
+            )}
+
+            {renderTabRow}
+
+            {focusTab === 'event' && (
+              <div className="space-y-3">
+                {isWeek ? (
+                  <>
+                    <div className="flex gap-1">
+                      <button onClick={() => setWeekDay(null)}
+                        className={cn('flex-1 py-1.5 rounded-md text-[11px] font-medium transition-colors',
+                          weekDay === null ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-bold'
+                            : 'bg-muted/60 text-secondary-text hover:text-foreground')}>
+                        全部
+                      </button>
+                      {weekDays.map((d, i) => (
+                        <button key={d} onClick={() => setWeekDay(d)}
+                          className={cn('flex-1 py-1.5 rounded-md text-[11px] font-medium transition-colors',
+                            weekDay === d ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-bold'
+                              : 'bg-muted/60 text-secondary-text hover:text-foreground')}>
+                          {i === 0 ? '今天' : fmtWeekday(d)}
+                        </button>
+                      ))}
                     </div>
-                    <p className="text-xs text-foreground font-medium leading-snug">{e.title}</p>
+                    {(weekDay ? [weekDay] : weekDays).map((d) => {
+                      const items = byDate.get(d) ?? []
+                      const isToday = d === todayISO()
+                      return (
+                        <div key={d} className="space-y-1.5">
+                          <div className="flex items-center gap-2 rounded-md bg-muted/60 border border-border/30 px-2.5 py-1.5">
+                            <span className="text-[12px] font-bold text-foreground tabular-nums">{fmtDay(d)}</span>
+                            <span className="text-[11px] font-medium text-secondary-text">{isToday ? '今天 · ' : ''}{fmtWeekday(d)}</span>
+                            <span className="ml-auto text-[11px] font-medium text-secondary-text">
+                              {items.length > 0 ? `${items.length} 条` : '无重点日程'}
+                            </span>
+                          </div>
+                          {items.length === 0 ? (
+                            <div className="rounded-lg border border-dashed border-border/40 bg-muted/20 px-3 py-2 text-[11.5px] text-secondary-text">
+                              无重点日程（休市或无重要数据发布）
+                            </div>
+                          ) : items.map((e, i) => renderEventCard(e, i))}
+                        </div>
+                      )
+                    })}
+                  </>
+                ) : events.length === 0 ? (
+                  <EmptyHint text="本月前瞻事件未生成（本月首个采集日自动生成）" />
+                ) : groupEventsByDate(events).map(({ date, items }) => (
+                  <div key={date} className="space-y-1.5">
+                    <div className="flex items-center gap-2 rounded-md bg-muted/60 border border-border/30 px-2.5 py-1.5">
+                      <span className="text-[12px] font-bold text-foreground tabular-nums">{fmtDay(date)}</span>
+                      <span className="text-[11px] font-medium text-secondary-text">{fmtWeekday(date)}</span>
+                      <span className="ml-auto text-[11px] font-medium text-secondary-text">{items.length} 条</span>
+                    </div>
+                    {items.map((e, i) => renderEventCard(e, i))}
                   </div>
-                </div>
-                {e.impact_label && (
-                  <div className="flex items-center gap-2 text-[10.5px]">
-                    <span className="text-secondary-text">{e.impact_label}</span>
-                    <button onClick={() => navigate('/expectations/new')} className="ml-auto flex items-center gap-1 text-[10px] text-[hsl(var(--primary))] border border-[hsl(var(--primary))/30] px-2 py-0.5 rounded hover:bg-[hsl(var(--primary))/8] transition-colors">
-                      <Plus className="w-2.5 h-2.5" />写入预期
-                    </button>
+                ))}
+                {(data?.review_events ?? []).length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[12px] font-bold text-secondary-text">🕘 {reviewLabel}（延续关注）</span>
+                      <div className="flex-1 border-t border-dashed border-border/50" />
+                    </div>
+                    {data!.review_events.map((e, i) => renderEventCard(e, i, true))}
                   </div>
                 )}
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        {scope === 'week' && focusTab === 'stock' && (
-          <div className="space-y-1.5">
-            {(focusWeek?.stocks ?? []).length === 0 ? (
-              <EmptyHint text="焦点个股数据采集中（收盘后更新）" />
-            ) : focusWeek!.stocks.map((s) => (
-              <div key={s.stock_code} className="flex items-start gap-3 rounded-lg border border-border/40 px-3 py-2.5 hover:bg-muted/20 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-foreground">{s.stock_code} {s.stock_name}</span>
-                    <span className={cn('text-xs font-bold', (s.chg_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400')}>
-                      {s.chg_pct !== null ? `${s.chg_pct > 0 ? '+' : ''}${s.chg_pct.toFixed(2)}%` : '—'}
+            {focusTab === 'sector' && (
+              <div className="space-y-2">
+                <LookbackNote text={lookbackNote} />
+                {(data?.sectors ?? []).length === 0 ? (
+                  <EmptyHint text={isWeek ? '近 7 天回溯数据未生成（每日采集自动生成）' : '上月回溯数据未生成（本月首个采集日自动生成）'} />
+                ) : data!.sectors.map((sec, i) => (
+                  <div key={sec.sector_name} className={cn('flex items-center gap-2.5 rounded-lg border px-3 py-2.5 bg-card',
+                    i === 0 ? 'border-red-400/40 bg-red-400/[0.06]' : 'border-border/40')}>
+                    <RankBadge rank={i + 1} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[13px] font-bold text-foreground shrink-0">{sec.sector_name}</span>
+                        {sec.leader_code && (
+                          <span className="text-[11px] px-2 py-0.5 rounded-md bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] truncate">
+                            龙头 {sec.leader_code} {sec.leader_name}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-secondary-text mt-0.5 truncate">
+                        {sec.lifecycle_stage}{sec.lifecycle_day ? ` · 最高 ${sec.lifecycle_day} 板` : ''}
+                      </div>
+                    </div>
+                    {sec.limit_up_trend && sec.limit_up_trend.length > 0 && (
+                      <div className="flex items-end gap-0.5 h-6 shrink-0">
+                        {sec.limit_up_trend.map((v, j) => (
+                          <div key={j} className={cn('w-2.5 rounded-sm', j === sec.limit_up_trend!.length - 1 ? 'bg-[hsl(var(--primary))]' : 'bg-muted')} style={{ height: `${Math.max(v * 14, 8)}%` }} />
+                        ))}
+                      </div>
+                    )}
+                    <span className={cn('text-[15px] font-extrabold tabular-nums text-right shrink-0',
+                      (sec.chg_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400')}>
+                      {fmtPct(sec.chg_pct)}
                     </span>
-                    {(s.boards ?? 0) > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 text-secondary-text">{s.boards}连板</span>}
-                    {s.concept_tags.map((t) => <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-400/10 text-blue-400">{t}</span>)}
                   </div>
-                  {s.reason && <p className="text-[10.5px] text-secondary-text mt-1">{s.reason}</p>}
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        {scope === 'week' && focusTab === 'sector' && (
-          <div className="space-y-2">
-            {(focusWeek?.sectors ?? []).length === 0 ? (
-              <EmptyHint text="热点板块数据采集中（收盘后更新）" />
-            ) : focusWeek!.sectors.map((sec) => (
-              <div key={sec.sector_name} className="flex items-center gap-3 rounded-lg border border-border/40 px-3 py-2.5">
-                <span className="text-xs font-semibold text-foreground w-20 shrink-0">{sec.sector_name}</span>
-                <span className={cn('text-xs font-bold', (sec.chg_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400')}>{fmtPct(sec.chg_pct)}</span>
-                {sec.lifecycle_stage && <span className="text-[10.5px] text-secondary-text">{sec.lifecycle_stage}</span>}
-                {sec.limit_up_trend && sec.limit_up_trend.length > 0 && (
-                  <div className="ml-auto flex items-end gap-0.5 h-5">
-                    {sec.limit_up_trend.map((v, i) => (
-                      <div key={i} className={cn('w-3 rounded-sm', i === sec.limit_up_trend!.length - 1 ? 'bg-[hsl(var(--primary))]' : 'bg-muted')} style={{ height: `${Math.max(v * 14, 4)}%` }} />
-                    ))}
-                    <span className="text-[9.5px] text-secondary-text ml-1">{sec.limit_up_trend.join('→')}</span>
+            {focusTab === 'stock' && (
+              <div className="space-y-2">
+                <LookbackNote text={lookbackNote} />
+                {(data?.stocks ?? []).length === 0 ? (
+                  <EmptyHint text={isWeek ? '近 7 天回溯数据未生成（每日采集自动生成）' : '上月回溯数据未生成（本月首个采集日自动生成）'} />
+                ) : data!.stocks.map((s, i) => (
+                  <div key={s.stock_code} className={cn('rounded-lg border px-3 py-2.5 bg-card space-y-1',
+                    i === 0 ? 'border-red-400/40 bg-red-400/[0.06]' : 'border-border/40')}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[13px] font-bold text-foreground tabular-nums">{s.stock_code}</span>
+                      <span className="text-[13px] font-semibold text-foreground">{s.stock_name}</span>
+                      {(s.boards ?? 0) > 0 && (
+                        <span className={cn('text-[11px] font-extrabold px-2 py-0.5 rounded-md ring-1 shrink-0',
+                          (s.boards ?? 0) >= 5
+                            ? 'bg-gradient-to-br from-red-400/15 to-orange-400/15 text-red-400 ring-red-400/30'
+                            : 'bg-gradient-to-br from-orange-400/15 to-amber-400/15 text-orange-400 ring-orange-400/30')}>
+                          {(s.boards ?? 0) >= 5 ? '👑 ' : ''}{s.boards}连板
+                        </span>
+                      )}
+                      <span className={cn('text-[15px] font-extrabold tabular-nums',
+                        (s.chg_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400')}>
+                        {s.chg_pct !== null ? `${s.chg_pct > 0 ? '+' : ''}${s.chg_pct.toFixed(2)}%` : '—'}
+                      </span>
+                      {s.concept_tags.map((t) => <span key={t} className="text-[11px] px-2 py-0.5 rounded-md bg-blue-400/10 text-blue-400">{t}</span>)}
+                    </div>
+                    {s.reason && <p className="text-[11.5px] text-secondary-text">{s.reason}</p>}
                   </div>
-                )}
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </div>}
+        )
+      })()}
     </div>
   )
 }
@@ -1095,6 +1416,32 @@ export default function SentimentPage() {
     return () => { cancelled = true }
   }, [])
 
+  // 盘中 60s 轮询：仅交易阶段启用，页面不可见时暂停，恢复可见立即刷新一次
+  const phaseLive = ['intraday', 'lunch_break', 'closing_auction'].includes(
+    overview?.market_phase ?? ''
+  )
+  useEffect(() => {
+    if (!phaseLive) return
+    let cancelled = false
+    const tick = async () => {
+      if (document.visibilityState !== 'visible') return
+      try {
+        const fresh = await sentimentApi.getOverview()
+        if (!cancelled) setOverview(fresh)   // 失败保留旧数据
+      } catch { /* 保留旧数据 */ }
+    }
+    const timer = window.setInterval(tick, 60_000)
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void tick()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [phaseLive])
+
   // 月聚焦 / 跌停池懒加载（缓存）
   const [monthLoaded, setMonthLoaded] = useState(false)
   const [downLoaded, setDownLoaded] = useState(false)
@@ -1121,8 +1468,23 @@ export default function SentimentPage() {
     { key: 'focus',  label: '③ 市场聚焦演化' },
   ]
 
+  const headerPhase = (() => {
+    switch (overview?.market_phase) {
+      case 'intraday':
+      case 'lunch_break':
+      case 'closing_auction':
+        return '· 盘中实时'
+      case 'postmarket':
+        return overview.is_complete ? '· 收盘快照' : '· 盘后采集中'
+      case 'premarket':
+      case 'non_trading':
+        return '· 非交易时段'
+      default:
+        return overview?.is_complete ? '· 收盘快照' : '· 盘中/未采集'
+    }
+  })()
   const headerDate = overview?.trade_date
-    ? `${overview.trade_date} ${overview.is_complete ? '· 收盘快照' : '· 盘中/未采集'}`
+    ? `${overview.trade_date} ${headerPhase}`
     : '数据加载中…'
 
   return (
@@ -1164,6 +1526,7 @@ export default function SentimentPage() {
           {!loading && subView === 'emotion' && (
             <>
               <OverseasCard overseas={overview?.overseas ?? null} />
+              <IndexQuotesCard overview={overview} />
               <MainAxis overview={overview} trend={trend} />
               <DualDimension overview={overview} trend={trend} ladderTrend={ladderTrend} />
             </>
@@ -1197,7 +1560,7 @@ export default function SentimentPage() {
             </div>
           )}
 
-          <p className="text-[10.5px] text-secondary-text/40 text-center pb-2">
+          <p className="text-[11px] text-secondary-text/40 text-center pb-2">
             数据来源：data_provider 多源自动回退 · 收盘采集后以快照表为准
           </p>
         </div>

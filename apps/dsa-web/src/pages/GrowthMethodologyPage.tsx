@@ -85,7 +85,7 @@ export default function GrowthMethodologyPage() {
             基于过去 <span className="font-semibold text-foreground">92 天</span>的数据自动生成，可手动修改。
             这份文档不是一次写完的，随着数据积累由系统辅助你逐步填充和验证。
           </p>
-          <p className="text-[10.5px] text-secondary-text/60 mt-1.5">
+          <p className="text-[11px] text-secondary-text/60 mt-1.5">
             数据更新于 2026-09-19 · 下次自动更新：积累满 100 天后
           </p>
         </div>
@@ -114,7 +114,7 @@ export default function GrowthMethodologyPage() {
           <div className="mt-2 h-1.5 bg-muted/60 rounded-full overflow-hidden">
             <div className="h-full bg-[hsl(var(--primary))] rounded-full" style={{ width: '92%' }} />
           </div>
-          <p className="text-[10.5px] text-secondary-text/60 mt-1.5">92 / 100 天</p>
+          <p className="text-[11px] text-secondary-text/60 mt-1.5">92 / 100 天</p>
         </div>
 
         <p className="text-[11px] text-secondary-text/50 text-center pb-2">

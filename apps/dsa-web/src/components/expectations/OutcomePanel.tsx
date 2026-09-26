@@ -75,7 +75,7 @@ export function OutcomePanel({ outcome, assumptions, onSubmitReview, isSubmittin
               <span className={cn('text-2xl font-bold leading-none', scoreColor(outcome.autoScore).ring)}>
                 {Math.round(outcome.autoScore)}
               </span>
-              <span className={cn('text-[9px] font-medium mt-0.5', scoreColor(outcome.autoScore).ring)}>
+              <span className={cn('text-[11px] font-medium mt-0.5', scoreColor(outcome.autoScore).ring)}>
                 {scoreColor(outcome.autoScore).label}
               </span>
             </div>
@@ -95,7 +95,7 @@ export function OutcomePanel({ outcome, assumptions, onSubmitReview, isSubmittin
                     </span>
                   )}
                   <span className={cn(
-                    'text-[10.5px] px-1.5 py-0.5 rounded',
+                    'text-[11px] px-1.5 py-0.5 rounded',
                     outcome.indexScoreDetail.directionHit
                       ? 'bg-green-500/10 text-green-500'
                       : 'bg-red-500/10 text-red-500',
@@ -117,7 +117,7 @@ export function OutcomePanel({ outcome, assumptions, onSubmitReview, isSubmittin
                     </span>
                   )}
                   <span className={cn(
-                    'text-[10.5px] px-1.5 py-0.5 rounded',
+                    'text-[11px] px-1.5 py-0.5 rounded',
                     s.directionHit ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500',
                   )}>
                     {s.directionHit ? '✓' : '✗'}
@@ -139,7 +139,7 @@ export function OutcomePanel({ outcome, assumptions, onSubmitReview, isSubmittin
             <div className="text-xs font-medium text-secondary-text">假设验证</div>
             {assumptionReviews.map((ar, i) => (
               <div key={i} className="flex items-center gap-2">
-                <span className="shrink-0 w-4 h-4 rounded-full bg-muted flex items-center justify-center text-[9px] font-medium text-secondary-text">
+                <span className="shrink-0 w-4 h-4 rounded-full bg-muted flex items-center justify-center text-[11px] font-medium text-secondary-text">
                   {i + 1}
                 </span>
                 <span className="flex-1 text-xs text-secondary-text truncate" title={ar.assumption}>
@@ -152,7 +152,7 @@ export function OutcomePanel({ outcome, assumptions, onSubmitReview, isSubmittin
                       type="button"
                       onClick={() => updateAssumption(i, r)}
                       className={cn(
-                        'px-2 py-0.5 text-[10.5px] rounded-md border transition-all',
+                        'px-2 py-0.5 text-[11px] rounded-md border transition-all',
                         ar.result === r
                           ? r === 'hit'
                             ? 'bg-green-500/15 border-green-500/50 text-green-500 font-medium'

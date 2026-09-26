@@ -5,6 +5,14 @@
 
 本项目默认使用 **SQLite 单文件数据库**，无需安装数据库服务，本地直接连文件即可。
 
+## 连接信息速查
+
+| 项 | 值 |
+|---|---|
+| 数据库类型 | SQLite（**无用户名、无密码、无主机、无端口**，工具里这些输入框一律留空） |
+| 数据库名 | 就是个文件路径：`<仓库根目录>/data/stock_analysis.db`（由 `DATABASE_PATH` 配置，默认 `./data/stock_analysis.db`） |
+| 连接方式 | 不走网络，GUI / CLI / JDBC 直接打开该文件即可 |
+
 ## 一、数据库位置
 
 | 配置项 | 默认值 | 说明 |
@@ -79,7 +87,7 @@ JetBrains 系（IDEA、PyCharm、DataGrip）内置同一套 Database 工具，�
 1. 打开 Database 工具窗：右侧边栏 **Database** 标签（或 `View → Tool Windows → Database`）
 2. 点 **`+` → Data Source → SQLite**
 3. 首次使用会提示 **Download missing driver files**，点 Download（自动下载 sqlite-jdbc 驱动）
-4. 配置连接：
+4. 配置连接（**User / Password / Host / Port 全部留空**——SQLite 是文件库，没有这些概念，"数据库名"就是文件路径）：
    - **File**：选仓库内的 `data/stock_analysis.db`（建议用绝对路径，避免相对路径歧义）
    - 或切到 **URL** 模式直接填：`jdbc:sqlite:/Users/<you>/liyb/learning-project-v2/daily_stock_analysis/data/stock_analysis.db`
 5. **Test Connection** → OK 保存

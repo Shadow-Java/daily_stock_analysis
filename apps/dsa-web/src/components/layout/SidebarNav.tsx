@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, BarChart3, Bell, BriefcaseBusiness, Gauge, Home, LogOut, MessageSquareQuote, Search, Settings2, Target, Thermometer } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { SCREENING_CONFIG_CHANGED_EVENT, SYSTEM_CONFIG_CHANGED_EVENT, screeningApi } from '../../api/screening';
 import { useAuth } from '../../contexts/AuthContext';
@@ -22,23 +22,23 @@ type NavItem = {
   key: string;
   labelKey: UiTextKey;
   to: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: string;
   exact?: boolean;
   badge?: 'completion';
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { key: 'home', labelKey: 'layout.nav.home', to: '/', icon: Home, exact: true },
-  { key: 'chat', labelKey: 'layout.nav.chat', to: '/chat', icon: MessageSquareQuote, badge: 'completion' },
-  { key: 'screening', labelKey: 'layout.nav.screening', to: '/screening', icon: Search },
-  { key: 'portfolio', labelKey: 'layout.nav.portfolio', to: '/portfolio', icon: BriefcaseBusiness },
-  { key: 'decision-signals', labelKey: 'layout.nav.decisionSignals', to: '/decision-signals', icon: Activity },
-  { key: 'sentiment', labelKey: 'layout.nav.sentiment', to: '/sentiment', icon: Thermometer },
-  { key: 'expectations', labelKey: 'layout.nav.expectations', to: '/expectations', icon: Target },
-  { key: 'backtest', labelKey: 'layout.nav.backtest', to: '/backtest', icon: BarChart3 },
-  { key: 'alerts', labelKey: 'layout.nav.alerts', to: '/alerts', icon: Bell },
-  { key: 'usage', labelKey: 'layout.nav.usage', to: '/usage', icon: Gauge },
-  { key: 'settings', labelKey: 'layout.nav.settings', to: '/settings', icon: Settings2 },
+  { key: 'home', labelKey: 'layout.nav.home', to: '/', icon: '🏠', exact: true },
+  { key: 'chat', labelKey: 'layout.nav.chat', to: '/chat', icon: '💬', badge: 'completion' },
+  { key: 'screening', labelKey: 'layout.nav.screening', to: '/screening', icon: '🔍' },
+  { key: 'portfolio', labelKey: 'layout.nav.portfolio', to: '/portfolio', icon: '💼' },
+  { key: 'decision-signals', labelKey: 'layout.nav.decisionSignals', to: '/decision-signals', icon: '📈' },
+  { key: 'sentiment', labelKey: 'layout.nav.sentiment', to: '/sentiment', icon: '🌡️' },
+  { key: 'expectations', labelKey: 'layout.nav.expectations', to: '/expectations', icon: '🎯' },
+  { key: 'backtest', labelKey: 'layout.nav.backtest', to: '/backtest', icon: '📊' },
+  { key: 'alerts', labelKey: 'layout.nav.alerts', to: '/alerts', icon: '🔔' },
+  { key: 'usage', labelKey: 'layout.nav.usage', to: '/usage', icon: '⏱️' },
+  { key: 'settings', labelKey: 'layout.nav.settings', to: '/settings', icon: '⚙️' },
 ];
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNavigate, variant = 'default' }) => {
@@ -91,6 +91,10 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNav
   );
   const itemActiveClass = 'border-[var(--nav-active-border)] bg-[var(--nav-active-bg)] font-medium text-[hsl(var(--primary))]';
   const itemIconClass = cn(isRail ? 'h-[18px] w-[18px]' : 'h-5 w-5', 'shrink-0');
+  const navIconClass = cn(
+    'inline-flex shrink-0 items-center justify-center leading-none',
+    isRail ? 'h-[18px] w-[18px] text-[15px]' : 'h-5 w-5 text-base'
+  );
   const itemLabelClass = cn('truncate', isRail ? 'text-center' : '');
 
   return (
@@ -118,7 +122,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNav
       </div>
 
       <nav className={cn('flex flex-col gap-1.5', isRail ? '' : 'flex-1')} aria-label={t('layout.mainNav')}>
-        {navItems.map(({ key, labelKey, to, icon: Icon, exact, badge }) => {
+        {navItems.map(({ key, labelKey, to, icon, exact, badge }) => {
           const label = t(labelKey);
           return (
           <NavLink
@@ -134,9 +138,9 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({ collapsed = false, onNav
               )
             }
           >
-            {({ isActive }) => (
+            {() => (
               <>
-                <Icon className={cn(itemIconClass, isActive ? 'text-[var(--nav-icon-active)]' : 'text-current')} />
+                <span aria-hidden="true" className={navIconClass}>{icon}</span>
                 {!collapsed ? <span className={itemLabelClass}>{label}</span> : null}
                 {badge === 'completion' && completionBadge ? (
                   <StatusDot

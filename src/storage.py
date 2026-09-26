@@ -2174,8 +2174,37 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
                 if not inspect(self._engine).has_table(model.__tablename__):
                     model.__table__.create(self._engine)
                     logger.info("大盘情绪表已创建: %s", model.__tablename__)
+            self._ensure_market_sentiment_columns()
         except Exception as exc:
             logger.warning("大盘情绪 Schema 检查失败，已跳过: %s", exc)
+
+    def _ensure_market_sentiment_columns(self) -> None:
+        """旧库补齐情绪快照表增量列（SQLite ALTER，重复列容错）。"""
+        if not self._is_sqlite_engine:
+            return
+        try:
+            existing = {
+                column["name"]
+                for column in inspect(self._engine).get_columns(
+                    MarketDailySnapshotRecord.__tablename__
+                )
+            }
+        except Exception as exc:
+            logger.warning("大盘情绪快照列检查失败，已跳过: %s", exc)
+            return
+        for column in ("sh_close", "sh_chg_pct"):
+            if column in existing:
+                continue
+            try:
+                with self._engine.begin() as connection:
+                    connection.exec_driver_sql(
+                        f"ALTER TABLE {MarketDailySnapshotRecord.__tablename__} "
+                        f"ADD COLUMN {column} FLOAT"
+                    )
+                logger.info("大盘情绪快照表已补列: %s", column)
+            except OperationalError as exc:
+                if not self._is_sqlite_duplicate_column_error(exc, column):
+                    raise
 
     @classmethod
     def get_instance(cls) -> 'DatabaseManager':
@@ -4547,6 +4576,8 @@ class MarketDailySnapshotRecord(Base):
     hs300_chg_pct = Column(Float)
     sh50_chg_pct = Column(Float)
     chinext_chg_pct = Column(Float)
+    sh_close = Column(Float)                  # 上证指数收盘点位
+    sh_chg_pct = Column(Float)                # 上证指数涨跌幅（%）
 
     # 60日新高新低
     new_high_60d = Column(Integer)

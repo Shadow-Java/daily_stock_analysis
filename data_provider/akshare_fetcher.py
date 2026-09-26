@@ -158,6 +158,22 @@ def _is_hk_code(stock_code: str) -> bool:
     return code.isdigit() and 4 <= len(code) <= 5
 
 
+def _norm_importance(value: Any) -> int:
+    """财经日历重要性归一为 int（1~3），无法解析返回 0。"""
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return 0
+
+
+def _clean_calendar_text(value: Any) -> Optional[str]:
+    """财经日历文本字段清洗：空值/pandas NaN 归位 None。"""
+    text = str(value).strip() if value is not None else ''
+    if not text or text.lower() == 'nan':
+        return None
+    return text
+
+
 def _normalize_tencent_volume(fields: List[str]) -> Optional[int]:
     """
     将腾讯实时行情成交量归一为股。
@@ -2503,6 +2519,141 @@ class AkshareFetcher(BaseFetcher):
                 'source': '东方财富',
             })
         return rows
+
+    def get_economic_calendar(self, date: str) -> Optional[List[Dict[str, Any]]]:
+        """获取指定日期财经日历（百度经济数据）。
+
+        Args:
+            date: YYYY-MM-DD 或 YYYYMMDD
+
+        Returns:
+            [{date, time, region, event, importance, expect, previous, published}]，
+            失败返回 None。
+        """
+        import akshare as ak
+
+        compact = str(date).replace('-', '')
+        self._set_random_user_agent()
+        self._enforce_rate_limit()
+        logger.info("[API调用] ak.news_economic_baidu(date=%s) 获取财经日历...", compact)
+        df = ak.news_economic_baidu(date=compact)
+        if df is None or df.empty:
+            return []
+        rows: List[Dict[str, Any]] = []
+        for _, row in df.iterrows():
+            event = _clean_calendar_text(row.get('事件'))
+            if not event:
+                continue
+            rows.append({
+                'date': _clean_calendar_text(row.get('日期')),
+                'time': _clean_calendar_text(row.get('时间')),
+                'region': _clean_calendar_text(row.get('地区')),
+                'event': event,
+                'importance': _norm_importance(row.get('重要性')),
+                'expect': _clean_calendar_text(row.get('预期')),
+                'previous': _clean_calendar_text(row.get('前值')),
+                'published': _clean_calendar_text(row.get('公布')),
+            })
+        return rows
+
+    def get_sector_history(
+        self,
+        sector_name: str,
+        start_date: str,
+        end_date: str,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """获取行业板块区间日线（东财 kline 端点直连，用于周/月板块涨幅聚合）。
+
+        akshare 的 stock_board_industry_hist_em 内部请求缺 UA 会被服务端断连，
+        这里直接带 UA 请求 push2his kline 端点。
+
+        Args:
+            sector_name: 板块名（与涨停池 industry 同源的东财行业板块名）
+            start_date / end_date: YYYYMMDD
+
+        Returns:
+            [{date, close, chg_pct}] 按日期升序，失败返回 None。
+        """
+        board_code = self._sector_board_code(str(sector_name).strip())
+        if not board_code:
+            logger.warning("[Akshare] 未找到板块代码: %s", sector_name)
+            return []
+        self._enforce_rate_limit()
+        params = {
+            "secid": f"90.{board_code}",
+            "fields1": "f1,f2,f3,f4,f5,f6",
+            "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+            "klt": "101", "fqt": "0",
+            "beg": str(start_date), "end": str(end_date),
+        }
+        logger.info(
+            "[API调用] push2his kline(%s=%s, %s~%s) 获取板块日线...",
+            sector_name, board_code, start_date, end_date,
+        )
+        resp = self._em_get(
+            "http://7.push2his.eastmoney.com/api/qt/stock/kline/get", params,
+        )
+        resp.raise_for_status()
+        klines = ((resp.json() or {}).get('data') or {}).get('klines') or []
+        rows: List[Dict[str, Any]] = []
+        for line in klines:
+            # "日期,开盘,收盘,最高,最低,成交量,成交额,振幅,涨跌幅,涨跌额,换手率"
+            parts = str(line).split(',')
+            if len(parts) < 9:
+                continue
+            try:
+                close = float(parts[2])
+                chg = float(parts[8])
+            except (TypeError, ValueError):
+                continue
+            rows.append({'date': parts[0][:10], 'close': close, 'chg_pct': chg})
+        rows.sort(key=lambda r: r['date'])
+        return rows
+
+    def _em_get(self, url: str, params: Dict[str, Any], attempts: int = 3):
+        """东财 push2 端点带 UA 直连请求（指数级退避重试，服务端间歇性断连）。"""
+        headers = {"User-Agent": random.choice(USER_AGENTS)}
+        last_exc: Optional[Exception] = None
+        for attempt in range(attempts):
+            try:
+                resp = requests.get(url, params=params, headers=headers, timeout=15)
+                resp.raise_for_status()
+                return resp
+            except requests.RequestException as exc:
+                last_exc = exc
+                logger.warning(
+                    "[Akshare] 东财请求失败（第 %s 次）: %s", attempt + 1, exc,
+                )
+                time.sleep(2 ** attempt)
+        raise last_exc
+
+    def _sector_board_code(self, sector_name: str) -> Optional[str]:
+        """板块名 → 东财板块代码（实例级缓存，一次拉取全量映射）。"""
+        cached = getattr(self, '_sector_code_map', None)
+        if cached is None:
+            self._enforce_rate_limit()
+            mapping: Dict[str, str] = {}
+            for page in range(1, 8):
+                resp = self._em_get(
+                    "http://13.push2.eastmoney.com/api/qt/clist/get",
+                    {
+                        "pn": page, "pz": "100", "po": "1", "np": "1",
+                        "fltt": "2", "invt": "2", "fid": "f12",
+                        "fs": "m:90+t:2", "fields": "f12,f14",
+                    },
+                )
+                diff = ((resp.json() or {}).get('data') or {}).get('diff') or []
+                if not diff:
+                    break
+                for item in diff:
+                    name = str(item.get('f14') or '').strip()
+                    code = str(item.get('f12') or '').strip()
+                    if name and code:
+                        mapping[name] = code
+            self._sector_code_map = mapping
+            cached = mapping
+            logger.info("[Akshare] 板块代码映射加载完成（%s 个）", len(mapping))
+        return cached.get(sector_name)
 
     def _market_news_sina(self) -> List[Dict[str, Any]]:
         """新浪全球财经快讯（列：时间/内容，内容兼作标题与摘要）。"""

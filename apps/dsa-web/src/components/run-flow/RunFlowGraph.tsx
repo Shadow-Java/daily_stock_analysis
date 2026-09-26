@@ -686,7 +686,7 @@ export const RunFlowGraph: React.FC<RunFlowGraphProps> = ({
                     x={labelX}
                     y={labelY}
                     textAnchor={labelAnchor}
-                    className="fill-muted-text text-[10px]"
+                    className="fill-muted-text text-[11px]"
                     style={{ paintOrder: 'stroke', stroke: 'hsl(var(--card))', strokeWidth: 4 }}
                   >
                     {compactText(displayLabel, 22)}
@@ -811,7 +811,7 @@ export const RunFlowGraph: React.FC<RunFlowGraphProps> = ({
                       event.stopPropagation();
                       onToggleExpanded?.(node.id);
                     }}
-                    className="absolute bottom-2 right-2 z-40 inline-flex h-[18px] items-center gap-0.5 rounded-md border border-subtle bg-base/80 px-1 text-[9px] font-medium leading-none text-secondary-text shadow-sm transition-colors hover:border-primary/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan/15"
+                    className="absolute bottom-2 right-2 z-40 inline-flex h-[18px] items-center gap-0.5 rounded-md border border-subtle bg-base/80 px-1 text-[11px] font-medium leading-none text-secondary-text shadow-sm transition-colors hover:border-primary/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan/15"
                   >
                     {expanded ? (
                       <ChevronDown className="h-2 w-2" aria-hidden="true" />

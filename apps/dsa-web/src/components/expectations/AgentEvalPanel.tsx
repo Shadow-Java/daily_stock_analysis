@@ -39,7 +39,7 @@ function DimRow({
           />
         ))}
       </div>
-      <span className="text-[10.5px] text-secondary-text">{value != null ? `${value}/5` : '—'}</span>
+      <span className="text-[11px] text-secondary-text">{value != null ? `${value}/5` : '—'}</span>
     </div>
   )
 }
@@ -110,7 +110,7 @@ export function AgentEvalPanel({ eval_, onTrigger, isTriggering }: Props) {
         {/* 偏差标签 */}
         {eval_.biasTags && eval_.biasTags.length > 0 && (
           <div>
-            <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide mb-1.5">
+            <div className="text-[11px] font-semibold text-secondary-text uppercase tracking-wide mb-1.5">
               检测到的认知偏差
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -118,7 +118,7 @@ export function AgentEvalPanel({ eval_, onTrigger, isTriggering }: Props) {
                 <span
                   key={tag}
                   className={cn(
-                    'px-2 py-0.5 text-[10.5px] rounded border font-medium',
+                    'px-2 py-0.5 text-[11px] rounded border font-medium',
                     BIAS_COLOR[tag] ?? 'bg-orange-500/10 border-orange-500/30 text-orange-500',
                   )}
                 >
@@ -134,7 +134,7 @@ export function AgentEvalPanel({ eval_, onTrigger, isTriggering }: Props) {
           <div className="grid grid-cols-2 gap-3">
             {eval_.strengths && eval_.strengths.length > 0 && (
               <div>
-                <div className="text-[10.5px] font-semibold text-green-500 uppercase tracking-wide mb-1.5">
+                <div className="text-[11px] font-semibold text-green-500 uppercase tracking-wide mb-1.5">
                   ✅ 优点
                 </div>
                 <ul className="space-y-1.5">
@@ -149,7 +149,7 @@ export function AgentEvalPanel({ eval_, onTrigger, isTriggering }: Props) {
             )}
             {eval_.weaknesses && eval_.weaknesses.length > 0 && (
               <div>
-                <div className="text-[10.5px] font-semibold text-amber-500 uppercase tracking-wide mb-1.5">
+                <div className="text-[11px] font-semibold text-amber-500 uppercase tracking-wide mb-1.5">
                   ⚠ 待改进
                 </div>
                 <ul className="space-y-1.5">
@@ -168,13 +168,13 @@ export function AgentEvalPanel({ eval_, onTrigger, isTriggering }: Props) {
         {/* 改进建议 */}
         {eval_.improvementSuggestions && eval_.improvementSuggestions.length > 0 && (
           <div>
-            <div className="text-[10.5px] font-semibold text-[hsl(var(--primary))] uppercase tracking-wide mb-1.5">
+            <div className="text-[11px] font-semibold text-[hsl(var(--primary))] uppercase tracking-wide mb-1.5">
               💡 改进建议
             </div>
             <ul className="space-y-1.5">
               {eval_.improvementSuggestions.map((s, i) => (
                 <li key={i} className="text-xs text-secondary-text leading-relaxed flex gap-2">
-                  <span className="shrink-0 w-4 h-4 rounded-full bg-[hsl(var(--primary))/15] text-[hsl(var(--primary))] text-[9px] flex items-center justify-center font-bold mt-0.5">
+                  <span className="shrink-0 w-4 h-4 rounded-full bg-[hsl(var(--primary))/15] text-[hsl(var(--primary))] text-[11px] flex items-center justify-center font-bold mt-0.5">
                     {i + 1}
                   </span>
                   {s}

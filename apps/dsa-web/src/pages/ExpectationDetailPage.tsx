@@ -138,7 +138,7 @@ export default function ExpectationDetailPage() {
                   <span className="flex items-center gap-1 flex-wrap">
                     驱动
                     {exp.decisionDrivers.map((d) => (
-                      <span key={d} className="px-1.5 py-0.5 rounded bg-[hsl(var(--primary))/10] text-[hsl(var(--primary))] text-[10.5px]">{d}</span>
+                      <span key={d} className="px-1.5 py-0.5 rounded bg-[hsl(var(--primary))/10] text-[hsl(var(--primary))] text-[11px]">{d}</span>
                     ))}
                   </span>
                 )}
@@ -146,7 +146,7 @@ export default function ExpectationDetailPage() {
                   <span className="flex items-center gap-1 flex-wrap">
                     干扰
                     {exp.interferenceFlags.map((f) => (
-                      <span key={f} className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[10.5px]">⚠ {f}</span>
+                      <span key={f} className="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[11px]">⚠ {f}</span>
                     ))}
                   </span>
                 )}
@@ -175,7 +175,7 @@ export default function ExpectationDetailPage() {
                     <div className="text-xs font-medium text-secondary-text">核心假设</div>
                     {exp.keyAssumptions.map((a, i) => (
                       <div key={i} className="flex gap-2 text-xs text-secondary-text">
-                        <span className="shrink-0 w-4 h-4 rounded-full bg-[hsl(var(--primary))/10] text-[hsl(var(--primary))] flex items-center justify-center text-[9px] font-bold">{i + 1}</span>
+                        <span className="shrink-0 w-4 h-4 rounded-full bg-[hsl(var(--primary))/10] text-[hsl(var(--primary))] flex items-center justify-center text-[11px] font-bold">{i + 1}</span>
                         <span className="leading-relaxed">{a}</span>
                       </div>
                     ))}
@@ -186,13 +186,13 @@ export default function ExpectationDetailPage() {
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     {exp.keyRisks && (
                       <div className="rounded-lg bg-red-500/5 border border-red-500/15 px-3 py-2">
-                        <div className="text-[10.5px] font-semibold text-red-500/80 mb-1">关键风险</div>
+                        <div className="text-[11px] font-semibold text-red-500/80 mb-1">关键风险</div>
                         <p className="text-xs text-secondary-text leading-relaxed">{exp.keyRisks}</p>
                       </div>
                     )}
                     {exp.operationPlan && (
                       <div className="rounded-lg bg-[hsl(var(--primary))/5] border border-[hsl(var(--primary))/15] px-3 py-2">
-                        <div className="text-[10.5px] font-semibold text-[hsl(var(--primary))] mb-1">操作计划</div>
+                        <div className="text-[11px] font-semibold text-[hsl(var(--primary))] mb-1">操作计划</div>
                         <p className="text-xs text-secondary-text leading-relaxed">{exp.operationPlan}</p>
                       </div>
                     )}
@@ -209,8 +209,8 @@ export default function ExpectationDetailPage() {
                         <span className="font-semibold text-xs text-foreground min-w-[68px] shrink-0">{s.code}</span>
                         <span className={cn('text-xs font-medium shrink-0', ACTION_COLOR[s.action] ?? 'text-secondary-text')}>{ACTION_LABEL[s.action]}</span>
                         <DirectionBadge direction={s.direction} size="sm" />
-                        {s.targetPrice && <span className="text-[10.5px] text-secondary-text shrink-0">目标 {s.targetPrice}</span>}
-                        {s.stopLoss && <span className="text-[10.5px] text-secondary-text shrink-0">止损 {s.stopLoss}</span>}
+                        {s.targetPrice && <span className="text-[11px] text-secondary-text shrink-0">目标 {s.targetPrice}</span>}
+                        {s.stopLoss && <span className="text-[11px] text-secondary-text shrink-0">止损 {s.stopLoss}</span>}
                         <div className="flex-1 min-w-0">
                           {s.reasoning && <p className="text-xs text-secondary-text leading-relaxed line-clamp-2">{s.reasoning}</p>}
                         </div>

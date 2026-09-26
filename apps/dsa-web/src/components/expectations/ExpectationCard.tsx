@@ -71,16 +71,16 @@ export function ExpectationCard({ expectation, onClick, selected }: Props) {
           </div>
           <div className="flex items-center gap-1.5">
             {status === 'pending' && (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-400/15 border border-amber-400/40 text-amber-600 dark:text-amber-400 leading-tight">
+              <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md bg-amber-400/15 border border-amber-400/40 text-amber-600 dark:text-amber-400 leading-tight">
                 待复盘
               </span>
             )}
             {status === 'future' && (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-muted border border-border/40 text-secondary-text leading-tight">
+              <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-md bg-muted border border-border/40 text-secondary-text leading-tight">
                 仅录入
               </span>
             )}
-            <span className="text-[10px] text-secondary-text/60 bg-muted/60 px-1 py-0.5 rounded">
+            <span className="text-[11px] text-secondary-text/60 bg-muted/60 px-1 py-0.5 rounded">
               {MARKET_LABEL[expectation.market] ?? expectation.market}
             </span>
           </div>
@@ -90,12 +90,12 @@ export function ExpectationCard({ expectation, onClick, selected }: Props) {
         <div className="flex items-center gap-1.5 flex-wrap">
           <DirectionBadge direction={expectation.indexDirection} size="sm" />
           {expectation.indexMagnitude && (
-            <span className="text-[10.5px] text-secondary-text">
+            <span className="text-[11px] text-secondary-text">
               {expectation.indexMagnitude === 'strong' ? '大幅' : expectation.indexMagnitude === 'moderate' ? '中幅' : '小幅'}
             </span>
           )}
           {stockCount > 0 && (
-            <span className="text-[10.5px] text-secondary-text">· {stockCount} 只个股</span>
+            <span className="text-[11px] text-secondary-text">· {stockCount} 只个股</span>
           )}
         </div>
 
@@ -110,14 +110,14 @@ export function ExpectationCard({ expectation, onClick, selected }: Props) {
             {stocks.slice(0, 3).map((s) => (
               <span
                 key={s.code}
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted/70 border border-border/40 text-secondary-text"
+                className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-muted/70 border border-border/40 text-secondary-text"
               >
                 <span className={cn('font-medium', ACTION_COLOR[s.action])}>{ACTION_LABEL[s.action]}</span>
                 <span>{s.code}</span>
               </span>
             ))}
             {stockCount > 3 && (
-              <span className="text-[10px] text-secondary-text/60 self-center">+{stockCount - 3}</span>
+              <span className="text-[11px] text-secondary-text/60 self-center">+{stockCount - 3}</span>
             )}
           </div>
         )}

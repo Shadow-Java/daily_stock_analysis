@@ -20,9 +20,9 @@ function BiasBar({ pct, color }: { pct: number; color: string }) {
 
 function TrendChip({ cur, last }: { cur: number; last: number }) {
   const diff = cur - last
-  if (diff < 0) return <span className="text-[10.5px] text-green-500 font-semibold">↓{Math.abs(diff)}次 改善</span>
-  if (diff > 0) return <span className="text-[10.5px] text-red-500 font-semibold">↑{diff}次 增加</span>
-  return <span className="text-[10.5px] text-secondary-text">持平</span>
+  if (diff < 0) return <span className="text-[11px] text-green-500 font-semibold">↓{Math.abs(diff)}次 改善</span>
+  if (diff > 0) return <span className="text-[11px] text-red-500 font-semibold">↑{diff}次 增加</span>
+  return <span className="text-[11px] text-secondary-text">持平</span>
 }
 
 export default function GrowthBiasProfilePage() {
@@ -96,15 +96,15 @@ export default function GrowthBiasProfilePage() {
               </summary>
               <div className="px-4 pb-4 space-y-3 border-t border-border/40">
                 <div className="pt-3">
-                  <div className="text-[10.5px] font-semibold text-secondary-text uppercase tracking-wide mb-1">识别特征</div>
+                  <div className="text-[11px] font-semibold text-secondary-text uppercase tracking-wide mb-1">识别特征</div>
                   <p className="text-xs text-secondary-text leading-relaxed">{b.desc}</p>
                 </div>
                 <div className="rounded-lg bg-red-500/5 border border-red-500/15 px-3 py-2">
-                  <div className="text-[10.5px] font-semibold text-red-500/80 mb-1">对你准确率的影响</div>
+                  <div className="text-[11px] font-semibold text-red-500/80 mb-1">对你准确率的影响</div>
                   <p className="text-xs text-secondary-text leading-relaxed">{b.impact}</p>
                 </div>
                 <div className="rounded-lg bg-[hsl(var(--primary))/5] border border-[hsl(var(--primary))/15] px-3 py-2">
-                  <div className="text-[10.5px] font-semibold text-[hsl(var(--primary))] mb-1">💡 处置建议</div>
+                  <div className="text-[11px] font-semibold text-[hsl(var(--primary))] mb-1">💡 处置建议</div>
                   <p className="text-xs text-secondary-text leading-relaxed">{b.tip}</p>
                 </div>
               </div>

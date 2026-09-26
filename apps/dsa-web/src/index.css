@@ -5,11 +5,6 @@
 /* =========================================
    1. THEME VARIABLES (Base/Classic)
    ========================================= */
-html {
-  /* Compact density: mockup-style scale, all rem-based sizes shrink accordingly */
-  font-size: 14px;
-}
-
 :root {
   /* Typography */
   font-family:
@@ -28,13 +23,14 @@ html {
 
   /* HSL tokens used by Tailwind-based components */
 
-  --background: 216 33% 97%;
+  --background: 214 43% 96%; /* #f0f4f9 */
   --foreground: 228 35% 12%;
   --card: 0 0% 100%;
   --card-foreground: 228 35% 12%;
   --popover: 0 0% 100%;
   --popover-foreground: 228 35% 12%;
   --primary: 193 100% 43%;
+  --primary-dark: 193 100% 33%; /* Darker primary for text/hover contrast on light surfaces */
   --primary-foreground: 216 33% 97%;
   --secondary: 214 32% 91%;
   --secondary-foreground: 228 35% 16%;
@@ -44,8 +40,8 @@ html {
   --accent-foreground: 228 35% 16%;
   --destructive: 349 82% 56%;
   --destructive-foreground: 210 33% 98%;
-  --border: 217 28% 84%;
-  --input: 217 28% 84%;
+  --border: 214 32% 91%; /* #e2e8f0 */
+  --input: 214 32% 91%; /* #e2e8f0 */
   --ring: 193 100% 43%;
   --radius: 0.625rem;
   --elevated: 0 0% 100%;
@@ -314,6 +310,7 @@ html {
   --popover: 230 24% 10%;
   --popover-foreground: 210 33% 98%;
   --primary: 190 100% 50%;
+  --primary-dark: 190 100% 62%; /* Lighter variant reads better on dark surfaces */
   --primary-foreground: 228 35% 8%;
   --secondary: 231 19% 15%;
   --secondary-foreground: 210 33% 94%;
@@ -1436,7 +1433,7 @@ textarea {
 .history-batch-delete-button {
   height: 22px;
   padding: 0 6px;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
 }
 

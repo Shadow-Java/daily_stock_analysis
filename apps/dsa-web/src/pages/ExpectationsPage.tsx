@@ -61,7 +61,7 @@ function StatChip({ icon: Icon, label, value, sub, color }: {
         <Icon className="w-4 h-4" />
       </div>
       <div>
-        <div className="text-[10.5px] text-secondary-text">{label}</div>
+        <div className="text-[11px] text-secondary-text">{label}</div>
         <div className="text-base font-bold text-foreground">
           {value}
           {sub && <span className="text-xs font-normal text-secondary-text ml-1">{sub}</span>}
@@ -100,23 +100,23 @@ function ExpCard({ item, onClick }: { item: UserExpectation; onClick: () => void
             <span className="text-xs text-secondary-text">周{weekday}</span>
             <DirectionBadge direction={item.indexDirection} size="sm" />
             {item.indexMagnitude && (
-              <span className="text-[10.5px] text-secondary-text">
+              <span className="text-[11px] text-secondary-text">
                 {item.indexMagnitude === 'strong' ? '大幅' : item.indexMagnitude === 'moderate' ? '中幅' : '小幅'}
               </span>
             )}
-            {stockCount > 0 && <span className="text-[10.5px] text-secondary-text">· {stockCount} 只个股</span>}
+            {stockCount > 0 && <span className="text-[11px] text-secondary-text">· {stockCount} 只个股</span>}
           </div>
           <p className="text-xs text-secondary-text leading-relaxed line-clamp-2">{item.indexReasoning}</p>
           <div className="flex items-center gap-1.5 flex-wrap">
             {stocks.slice(0, 3).map((s) => (
-              <span key={s.code} className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-muted/70 border border-border/40 text-secondary-text">
+              <span key={s.code} className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 rounded bg-muted/70 border border-border/40 text-secondary-text">
                 <span className={cn('font-medium', ACTION_COLOR[s.action])}>{ACTION_LABEL[s.action]}</span>
                 <span>{s.code}</span>
               </span>
             ))}
-            {stockCount > 3 && <span className="text-[10px] text-secondary-text/60">+{stockCount - 3}</span>}
+            {stockCount > 3 && <span className="text-[11px] text-secondary-text/60">+{stockCount - 3}</span>}
             <span className={cn(
-              'ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border',
+              'ml-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-md border',
               past
                 ? 'bg-amber-400/12 border-amber-400/40 text-amber-600 dark:text-amber-400'
                 : 'bg-muted border-border/40 text-secondary-text font-normal',
@@ -126,7 +126,7 @@ function ExpCard({ item, onClick }: { item: UserExpectation; onClick: () => void
             {item.overallConfidence != null && (
               <span className="flex items-center gap-px ml-0.5">
                 {Array.from({ length: 5 }, (_, i) => (
-                  <span key={i} className={cn('text-[10px]', i < item.overallConfidence! ? 'text-amber-400' : 'text-border/50')}>★</span>
+                  <span key={i} className={cn('text-[11px]', i < item.overallConfidence! ? 'text-amber-400' : 'text-border/50')}>★</span>
                 ))}
               </span>
             )}
@@ -237,9 +237,9 @@ export default function ExpectationsPage() {
           {groups.map((group) => (
             <div key={group.label}>
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-[10.5px] font-bold text-secondary-text uppercase tracking-wide">{group.label}</span>
+                <span className="text-[11px] font-bold text-secondary-text uppercase tracking-wide">{group.label}</span>
                 <div className="flex-1 h-px bg-border/40" />
-                <span className="text-[10.5px] text-secondary-text">{group.items.length} 条</span>
+                <span className="text-[11px] text-secondary-text">{group.items.length} 条</span>
               </div>
               <div className="space-y-2">
                 {group.items.map((item) => (

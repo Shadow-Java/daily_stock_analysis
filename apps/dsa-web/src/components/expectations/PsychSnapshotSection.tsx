@@ -63,7 +63,7 @@ export function PsychSnapshotSection({
       <div className="flex items-center gap-1.5">
         <span className="text-[13px]">🧘</span>
         <span className="text-xs font-semibold text-foreground/80">录入前：了解此刻的自己</span>
-        <span className="ml-auto text-[10.5px] text-secondary-text">约 60 秒</span>
+        <span className="ml-auto text-[11px] text-secondary-text">约 60 秒</span>
       </div>
 
       {/* 情绪滑块 */}
@@ -85,7 +85,7 @@ export function PsychSnapshotSection({
             style={{ background: EMOTION_TRACK }}
           />
         </div>
-        <div className="flex justify-between text-[10px] text-secondary-text/60">
+        <div className="flex justify-between text-[11px] text-secondary-text/60">
           <span>极度恐惧</span>
           <span>中性</span>
           <span>极度贪婪</span>

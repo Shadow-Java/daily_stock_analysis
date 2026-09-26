@@ -2345,7 +2345,7 @@ export const LLMChannelEditor: React.FC<LLMChannelEditorProps> = ({
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-medium uppercase tracking-wider text-muted-text">渠道列表</span>
               {channels.length > 0 ? (
-                <span className="text-[10px] text-muted-text">{channels.filter((c) => c.enabled).length}/{channels.length} 已启用</span>
+                <span className="text-[11px] text-muted-text">{channels.filter((c) => c.enabled).length}/{channels.length} 已启用</span>
               ) : null}
             </div>
 

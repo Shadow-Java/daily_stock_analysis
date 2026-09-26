@@ -65,7 +65,7 @@ function AchievementBadge({ emoji, label, desc, unlocked }: { emoji: string; lab
       <span className="text-base">{unlocked ? emoji : '○'}</span>
       <div>
         <div className="font-semibold leading-tight">{label}</div>
-        <div className="text-[10.5px] opacity-70 font-normal leading-tight mt-0.5">{desc}</div>
+        <div className="text-[11px] opacity-70 font-normal leading-tight mt-0.5">{desc}</div>
       </div>
     </div>
   )
@@ -93,7 +93,7 @@ export default function GrowthPage() {
 
           {/* 思维质量 */}
           <div className="rounded-xl border border-border/50 bg-card p-4">
-            <div className="text-[10.5px] font-bold text-secondary-text uppercase tracking-wide mb-2">🧠 思维质量</div>
+            <div className="text-[11px] font-bold text-secondary-text uppercase tracking-wide mb-2">🧠 思维质量</div>
             <MetricRow label="推理质量均值" value="3.8 / 5" trend="up" highlight="green" />
             <MetricRow label="信息利用完整性" value="3.2 / 5" trend="flat" />
             <MetricRow label="假设显式化率" value="89%" trend="up" highlight="green" />
@@ -102,7 +102,7 @@ export default function GrowthPage() {
 
           {/* 执行纪律 */}
           <div className="rounded-xl border border-border/50 bg-card p-4">
-            <div className="text-[10.5px] font-bold text-secondary-text uppercase tracking-wide mb-2">🎯 执行纪律</div>
+            <div className="text-[11px] font-bold text-secondary-text uppercase tracking-wide mb-2">🎯 执行纪律</div>
             <MetricRow label="原则违规率" value="18%" trend="down" highlight="green" />
             <MetricRow label="止损执行率" value="67%" trend="up" highlight="yellow" />
             <MetricRow label="仓位按计划率" value="74%" trend="up" />
@@ -111,7 +111,7 @@ export default function GrowthPage() {
 
           {/* 认知偏差 */}
           <div className="rounded-xl border border-border/50 bg-card p-4">
-            <div className="text-[10.5px] font-bold text-secondary-text uppercase tracking-wide mb-3">🔍 认知偏差频率（近90天）</div>
+            <div className="text-[11px] font-bold text-secondary-text uppercase tracking-wide mb-3">🔍 认知偏差频率（近90天）</div>
             <BiasBar label="确认偏差" count={32} pct={70} color="#fc8181" />
             <BiasBar label="近因效应" count={20} pct={44} color="#f6ad55" />
             <BiasBar label="损失厌恶" count={16} pct={35} color="#f6ad55" />
@@ -126,7 +126,7 @@ export default function GrowthPage() {
 
           {/* 情绪分析 */}
           <div className="rounded-xl border border-border/50 bg-card p-4">
-            <div className="text-[10.5px] font-bold text-secondary-text uppercase tracking-wide mb-2">😌 情绪状态分析</div>
+            <div className="text-[11px] font-bold text-secondary-text uppercase tracking-wide mb-2">😌 情绪状态分析</div>
             <MetricRow label="最优情绪区间" value="4 – 6" highlight="green" />
             <MetricRow label="平静时准确率" value="71%" highlight="green" />
             <MetricRow label="高压时准确率" value="43%" highlight="red" />
@@ -146,7 +146,7 @@ export default function GrowthPage() {
             <span className="text-sm font-semibold text-foreground">成就解锁</span>
           </div>
           <div className="mb-3">
-            <p className="text-[10.5px] text-secondary-text uppercase tracking-wide font-semibold mb-2">已解锁</p>
+            <p className="text-[11px] text-secondary-text uppercase tracking-wide font-semibold mb-2">已解锁</p>
             <div className="grid grid-cols-2 gap-2">
               <AchievementBadge emoji="🔵" label="坚持记录" desc="连续记录超过 30 天" unlocked />
               <AchievementBadge emoji="🟢" label="止损进化" desc="止损执行率首次超过 60%" unlocked />
@@ -155,7 +155,7 @@ export default function GrowthPage() {
             </div>
           </div>
           <div>
-            <p className="text-[10.5px] text-secondary-text uppercase tracking-wide font-semibold mb-2">待解锁</p>
+            <p className="text-[11px] text-secondary-text uppercase tracking-wide font-semibold mb-2">待解锁</p>
             <div className="grid grid-cols-2 gap-2">
               <AchievementBadge emoji="○" label="知行合一" desc="原则违规率连续 4 周 < 10%" unlocked={false} />
               <AchievementBadge emoji="○" label="逻辑严谨" desc="连续 10 次预期含 ≥ 2 条假设" unlocked={false} />
@@ -176,7 +176,7 @@ export default function GrowthPage() {
             </div>
             <div>
               <div className="text-xs font-semibold text-foreground">我的原则库</div>
-              <div className="text-[10.5px] text-secondary-text">5 条原则 · 违规率 18%</div>
+              <div className="text-[11px] text-secondary-text">5 条原则 · 违规率 18%</div>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-secondary-text ml-auto" />
           </Link>
@@ -190,7 +190,7 @@ export default function GrowthPage() {
             </div>
             <div>
               <div className="text-xs font-semibold text-foreground">偏差画像</div>
-              <div className="text-[10.5px] text-secondary-text">86 次标注 · 6 种偏差</div>
+              <div className="text-[11px] text-secondary-text">86 次标注 · 6 种偏差</div>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-secondary-text ml-auto" />
           </Link>
@@ -204,7 +204,7 @@ export default function GrowthPage() {
             </div>
             <div>
               <div className="text-xs font-semibold text-foreground">我的方法论</div>
-              <div className="text-[10.5px] text-secondary-text">基于 92 天数据 · 可编辑</div>
+              <div className="text-[11px] text-secondary-text">基于 92 天数据 · 可编辑</div>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-secondary-text ml-auto" />
           </Link>

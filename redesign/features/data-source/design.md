@@ -1,6 +1,6 @@
 # 同花顺 Financial-API 对接方案 —— 新增 ThsFetcher
 
-> 版本: v0.1 | 日期: 2026-09-25 | 状态: 草稿（待评审）
+> 版本: v0.4 | 日期: 2026-09-25 | 状态: P0+P1 已实现；指数快照提前自 P2 落地并作为 A 股指数优先源（情绪页沪深成交额拆分生效，见 §7.1-6）；首轮联网联调完成（K线/meta/快照 ✅ 并已修列名映射；三池接口 THS 侧空返回待开通确认，见 §7.1-2）
 > 上游项目: [HiThink-Tech/Financial-API](https://github.com/HiThink-Tech/Financial-API)（同花顺官方开放 API，文档站 fuyao.aicubes.cn）
 > 关联: [数据源现状审计](../../platform/data-source/data-source-audit.md) · [数据核对指南](../../platform/data-source/data-verification-guide.md) · [实时数据方案](../../platform/data-source/realtime-data-plan.md)
 > 目标：在 `data_provider/` 新增同花顺官方 API 的 Fetcher，作为 A 股行情与情绪数据的第二个独立商业源，补齐涨停/跌停/炸板池等缺口。
@@ -78,7 +78,7 @@
 | `/api/a-share/special-data/dragon-tiger-list` | `board_type=all/org/hot_money`、`date` | 龙虎榜明细 | 龙虎榜第二源（现仅 akshare） | P2 |
 | `/api/a-share/special-data/hot-stock-list` | `period=day/hour` | Top30 热股 | `get_hot_stocks` 第二源 | P2 |
 | `/api/a-share/auction/snapshot` | `stage=live/final` | 竞价快照 | 独有能力，情绪页开盘前数据面 | P2 |
-| `/api/a-share-index/prices/snapshot` / `historical` | `thscode=000001.SH/399001.SZ/886042.TI` | 指数行情 | `get_main_indices(region="cn")` 补充源 | P2 |
+| `/api/a-share-index/prices/snapshot` / `historical` | `thscodes=`（逗号分隔批量）/ `thscode`、`interval=1d`、start/end（ms） | 指数行情（`last_price/price_change/price_change_ratio_pct/volume/turnover`，**无 name 字段**，本地 `_THS_INDEX_CODES` 映射） | `get_main_indices(region="cn")`（**已实现**，Manager cn 门面 THS 优先源）；historical 未接 | P2 提前落地 ✅ |
 | `/api/a-share-index/catalog/ths-index-list` | `tag=cn_concept/industry/region/tszs` | 同花顺概念/行业指数目录 | `get_concept_rankings` / 板块聚合（**注意口径与东财概念不同**） | P2 |
 | `/api/meta/tickers/search` | `q=`（名称/代码） | 代码消歧 + **名称** | 快照补名的辅助通道 | P1（随池子一起） |
 | `/api/a-share/valuations/snapshot` | 批量 ≤100 | PE/PB/PS/PCF | 估值数据面（现无直连接口） | P2 |
@@ -92,6 +92,12 @@
 ## 四、ThsFetcher 设计
 
 ### 4.1 类结构（完全对齐 BaseFetcher 契约，base.py:331-610）
+
+> **v0.2 实现记录**（P0+P1 已落地 `data_provider/ths_fetcher.py` + `tests/test_ths_fetcher.py`，与下述草图的三处偏差）：
+> 1. `name = "ThsFetcher"`（非草图的 `"ths"`）：`_DAILY_MARKET_FETCHER_SUPPORT` 键用类名风格，且港/美日线路径按该表跳过不支持市场
+> 2. `is_available` 为**方法**（镜像 Tushare 写法；Manager 探针对 property/method 均兼容）
+> 3. 配置读取走 `src/config.py`（`hithink_finance_api_key` / `hithink_finance_api_url` 字段），非裸 `os.getenv`；URL 环境变量 `HITHINK_FINANCE_API_URL` 校验逻辑与 `TUSHARE_HTTP_URL` 一致（`_resolve_ths_base_url`）
+> 另：认证失败（2001/2003）置进程内 `_auth_failed` 长冷却（`is_available()` 转 False），瞬时错误由 Manager CircuitBreaker 兜底；池类 `date` 参数归一为 `YYYY-MM-DD`，**留空不传**（端点默认最新交易日）；历史 K 线 volume/amount **透传不换算**（单位待联网核对后在 `_normalize_data` 单点换算）；池 item 字段名按 §三 记录值写候选键映射（`_first_of` 集中维护），真调后收敛。
 
 ```python
 # data_provider/ths_fetcher.py
@@ -215,9 +221,27 @@ Agent 工具化（把 `get_limit_up_pool` 等包装成 agent tool）见 audit �
 
 | 阶段 | 内容 | 改动面 | 验收 |
 |---|---|---|---|
-| **P0** | `_ThsHttpClient` + `ThsFetcher` 骨架（`_fetch_raw_data`/`_normalize_data`/`is_available`）+ Manager 注册 + `.env.example` | 新增 1 文件，改 2 处（Manager、`.env.example`） | `pytest -m network` 拉一只 A 股历史 K，与东财数据对照（±0.01）；离线单测：code 转换、错误码映射、pct_chg 推导 |
-| **P1** | 涨停/跌停/炸板池 hooks + meta 搜索补名 | 同一文件内追加 | 与 akshare 同日池子列表交叉比对，结论回填核对指南 |
+| **P0 ✅** | `_ThsHttpClient` + `ThsFetcher` 骨架（`_fetch_raw_data`/`_normalize_data`/`is_available`）+ Manager 注册 + `.env.example` | 新增 1 文件，改 3 处（Manager、`.env.example`、`src/config.py`） | 离线单测 32 项通过（`tests/test_ths_fetcher.py`）；联网项见 §7.1 |
+| **P1 ✅** | 涨停/跌停/炸板池 hooks + meta 搜索补名 | 同一文件内追加 | 离线单测覆盖契约/时间归一/boards 字段；联网交叉比对见 §7.1 |
 | **P2** | 指数、龙虎榜、热榜、集合竞价、估值/财务、概念目录 | 按需逐个 hook | 逐接口按核对指南 §2.1 单点核对 |
+
+### 7.1 联调补验清单
+
+**首轮联调结果（2026-09-25，fuyao.aicubes.cn，正式 key）：**
+
+1. 历史日 K ✅：真实列名 `date_ms` / `open_price` / `high_price` / `low_price` / `close_price` / `volume` / `turnover`；单位核对 **volume=股、turnover(=amount)=元**（600519 交叉验证 amount/volume ≈ 收盘价），与项目标准一致，透传不换算；`_normalize_data` 已加 `_THS_KLINE_ALIASES` 列名映射（本次联调修复的唯一代码缺口）
+2. 涨/跌/炸板池 ⚠️：三端点均 `code=0` 但 `pagination.total=0`（无 date、date=09-24、历史 date=09-10 皆空）；同模块**连板天梯（30 条）/ 热榜（30 条）有数据** → 接口路径与参数正确（服务端正常回显分页），疑似 key 的池数据集未开通或 THS 侧停服，**需联系同花顺确认**；`_first_of` 候选键维持 design §三 记录值，拿到真实样本后再收敛；回填核对指南 §2.2 的交叉比对相应顺延
+3. meta 搜索 ✅：`/api/meta/tickers/search` 返回 `thscode/ticker/name/exchange/asset_type/currency/list_date`，可直接供快照补名
+4. 实时快照 ✅（P2 备查）：字段 `thscode/ticker/volume(股)/turnover(元)/last_price/open_price/high_price/low_price/prev_price/price_change/price_change_ratio_pct`
+5. 错误码 2001/2003 / 4001：有效 key 未触发，保持待验（离线单测已覆盖映射逻辑）
+6. 优先级 boost ✅：配置 key 后日志确认 `ThsFetcher 优先级提升为 2`；Manager 排序位置待下轮真实分析任务观察
+7. 指数快照 ✅（提前自 P2 落地）：`/api/a-share-index/prices/snapshot` 批量 `thscodes=` 一次拉 8 指数（000001.SH/000016.SH/000300.SH/399001.SZ/399006.SZ/000688.SH/399106.SZ/899050.BJ，未知代码服务端自动忽略）；返回**无 name 字段**，本地 `_THS_INDEX_CODES` 映射；**turnover=对应市场总额**（000001.SH=沪市总额、399001.SZ/399106.SZ=深市总额同值，与 DB `total_amount` 16689 亿 ≈ 沪 7836+深 8697 亿互验）；`Manager.get_main_indices(region="cn")` 门面 THS 先行（镜像 tickflow 先例），失败回落 efinance/akshare/tickflow；情绪页 `_parse_indices` 仅取 `上证指数`/`深证综指` 行拆分 `sh_amount`/`sz_amount`（亿元），**明确拒绝深证成指**（部分源为成份股口径，避免跨源语义漂移）
+
+**遗留待验（下轮补）：**
+
+- 历史日 K 与东财对照（价格 ±0.01）
+- 池类接口开通后：与 akshare 同日列表交叉比对（家数/代码集/首封时间），结论回填核对指南 §2.2，收敛 `_first_of` 候选键
+- 无效 key 触发 2001/2003 的 `_auth_failed` 长冷却实测；4001 熔断路径观察
 
 每阶段独立 commit、独立可回滚；P0 合入后若线上异常，`git revert` 单提交即可，且未配置 key 的部署完全不受影响。
 
